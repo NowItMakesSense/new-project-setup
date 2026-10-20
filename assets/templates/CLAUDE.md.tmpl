@@ -1,0 +1,34 @@
+# {{PROJECT_NAME}}
+
+{{PROJECT_DESCRIPTION}}
+
+- Type: {{PROJECT_TYPE}} | Domain: {{DOMAIN}} | Stack: {{STACK}}
+- Docs/specs language: {{DOC_LANGUAGE}} (agent instructions stay in English)
+- Compliance: {{COMPLIANCE}} | Team: {{TEAM}}
+
+## Prime directives
+1. **Ask, never assume.** If anything is unclear or missing, ask the user before acting. Items marked `TBD` must be resolved with `/plan-grill`.
+2. **NEVER access the system database.** No queries, DB CLIs, migrations applied, seeds, dumps, `docker exec`, or reading `.env`/credentials/connection strings - not directly, not via scripts, not via wrappers. This is enforced by `.claude/settings.json` (deny rules) and `.claude/hooks/block-db-access.py`. Never try to bypass them. If a task seems to need DB access, stop and tell the user. Migrations are only *generated as files* for a human to review and apply. Tests use: {{TEST_DB_STRATEGY}} (DB engine in use: {{DB_ENGINE}}).
+3. **Specs are the source of truth.** No code without an approved spec in `docs/specs/<feature>/`. Code that contradicts a spec requires updating the spec first, with approval.
+4. **User instructions override defaults** below.
+5. Destructive or outward-facing actions (delete, push, deploy, publish, send) need explicit user confirmation.
+
+## Engineering defaults ({{ENGINEERING_PRINCIPLES}})
+Clean Code, Clean Architecture (dependencies point inward), DDD (ubiquitous language in `docs/glossary.md`), SOLID, strict TDD (red -> green -> refactor), small PRs, {{VCS_BRANCHING}}.
+
+## Workflow
+Use `/plan-grill` for discovery, then `/orchestrate` to run the phases:
+Discovery -> Specs -> Architecture/Domain -> Tasks -> TDD loop -> Review -> Security -> CI/CD & release.
+Each phase ends with a human approval gate. Details: `.claude/skills/orchestrate/SKILL.md`.
+
+## Agents (`.claude/agents/`)
+planner, architect, domain, test, implementer, reviewer, security, devops-docs. The orchestrator delegates; it does not write production code.
+
+## Commands
+- Test: `{{TEST_CMD}}`
+- Lint/format: `{{LINT_CMD}}`
+- Build: `{{BUILD_CMD}}`
+(Any `TBD` must be filled once the stack is decided.)
+
+## Specs
+See `docs/specs/README.md`, `docs/adr/`, `docs/glossary.md`.

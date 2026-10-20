@@ -1,0 +1,25 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO({{PROJECT_NAME}}): set up the toolchain for the stack: {{STACK}}
+      - name: Lint
+        run: echo "Run: {{LINT_CMD}}"        # replace once LINT_CMD is decided
+      - name: Test
+        run: echo "Run: {{TEST_CMD}}"        # replace once TEST_CMD is decided; tests must not use the system DB
+      - name: Build
+        run: echo "Run: {{BUILD_CMD}}"       # replace once BUILD_CMD is decided
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
