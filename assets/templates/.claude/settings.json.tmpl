@@ -1,0 +1,62 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(psql:*)",
+      "Bash(pg_dump:*)",
+      "Bash(pg_restore:*)",
+      "Bash(mysql:*)",
+      "Bash(mysqldump:*)",
+      "Bash(mariadb:*)",
+      "Bash(mongosh:*)",
+      "Bash(mongo:*)",
+      "Bash(mongodump:*)",
+      "Bash(redis-cli:*)",
+      "Bash(sqlite3:*)",
+      "Bash(sqlcmd:*)",
+      "Bash(cqlsh:*)",
+      "Bash(clickhouse-client:*)",
+      "Bash(prisma:*)",
+      "Bash(npx prisma:*)",
+      "Bash(alembic:*)",
+      "Bash(flyway:*)",
+      "Bash(liquibase:*)",
+      "Bash(knex:*)",
+      "Bash(sequelize:*)",
+      "Bash(rake db:*)",
+      "Bash(rails db:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose exec:*)",
+      "Bash(docker-compose exec:*)",
+      "Bash(kubectl exec:*)",
+      "Bash(cat .env*)",
+      "Bash(printenv:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/credentials*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(./secrets/**)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(./secrets/**)"{{EXTRA_DENY_ITEMS}}
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{PYTHON_CMD}} \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-db-access.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

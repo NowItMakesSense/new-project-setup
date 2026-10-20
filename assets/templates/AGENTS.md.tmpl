@@ -1,0 +1,20 @@
+# AGENTS.md - {{PROJECT_NAME}}
+
+Universal instructions for any AI coding agent. (Hard enforcement exists only in Claude Code via `.claude/`; for other tools these rules are mandatory but self-enforced.)
+
+## Project
+{{PROJECT_DESCRIPTION}} - Type: {{PROJECT_TYPE}}, Stack: {{STACK}}, Docs language: {{DOC_LANGUAGE}}.
+
+## Rules
+1. Ask when unsure; never assume requirements, stack or architecture.
+2. **Never access the system database** (no queries, DB CLIs, migrations applied, dumps, container exec) and **never read `.env`, credentials, keys or connection strings.** If DB access seems necessary, stop and ask a human. Generate migrations as files only.
+3. Work spec-first: requirements -> design -> tasks in `docs/specs/<feature>/`, approved by the user, before code.
+4. Strict TDD: failing test -> minimal code -> refactor.
+5. Follow Clean Code, Clean Architecture, DDD, SOLID unless the user decided otherwise ({{ENGINEERING_PRINCIPLES}}).
+6. Confirm with the user before destructive or outward-facing actions.
+
+## Commands
+Test: `{{TEST_CMD}}` | Lint: `{{LINT_CMD}}` | Build: `{{BUILD_CMD}}`
+
+## Where things live
+`docs/specs/` specs - `docs/adr/` decisions - `docs/glossary.md` domain language - `.claude/` Claude Code agents/skills/guards.
