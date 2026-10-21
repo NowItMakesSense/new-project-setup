@@ -39,6 +39,8 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 | `docs/specs/`, `docs/adr/`, `docs/glossary.md` | Spec-driven artifacts, architectural decisions, ubiquitous language |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
 | `docs/knowledge-graph/` + `.claude/agents/knowledge-graph.md` | The domain model as a real graph (entities, VOs, aggregates, bounded contexts, relationships), MCP-backed when Node/`npx` is available |
+| `Database/` (only when the project has a database) | The complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature |
+| `docs/specs/<feature>/overview.html` (conditional, per feature) | Self-contained static HTML/SVG - no external dependency - summarizing a feature's affected screens, its scoped entity/relationship diagram, and affected `Database/` objects, for a non-technical reader. Produced only when that feature touches UI and/or the database |
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, one dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, carried into the next `/plan-grill` |
@@ -60,7 +62,7 @@ Each arrow is a **human gate**: the orchestrator summarizes what a subagent prod
 |---|---|---|---|
 | 1 | Discovery | `planner` via `/plan-grill`; `knowledge-graph` seeds/retrofits | `docs/specs/discovery.md`; initial knowledge graph |
 | 2 | Requirements | `planner` + `spec-writer` | `requirements.md` |
-| 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if the project has a UI) | `design.md`, ADRs, glossary, threat model, updated knowledge graph |
+| 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if the project has a UI) | `design.md` (incl. a feature-scoped entity/relationship diagram), ADRs, glossary, threat model, updated knowledge graph, `Database/` update + `overview.html` (if the feature touches UI/DB) |
 | 4 | Task breakdown | `planner` | `tasks.md` (TDD-sized) |
 | 5 | TDD loop, per task | `test` → `implementer` (→ `debug` if the first fix attempt fails) | failing test → green → refactor |
 | 6 | Review & QA | `reviewer`, `qa` | Findings in the shared `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD` |

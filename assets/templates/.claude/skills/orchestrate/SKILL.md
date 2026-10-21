@@ -31,7 +31,7 @@ You coordinate; you do not write production code and you never touch the databas
 |---|---|---|---|---|
 | 1 | Discovery | `planner` + `/plan-grill`; `knowledge-graph` seeds/retrofits | `docs/specs/discovery.md`; initial knowledge graph | User confirms summary |
 | 2 | Requirements | `planner` + `/spec-writer` | `requirements.md` | User approves |
-| 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md`, ADRs, glossary, threat model, updated knowledge graph | User approves |
+| 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md` (incl. feature diagram), ADRs, glossary, threat model, updated knowledge graph, `Database/` update + `overview.html` (if the feature touches UI/DB) | User approves |
 | 4 | Tasks | `planner` | `tasks.md` (TDD-sized) | User approves |
 | 5 | TDD loop, per task | `test` (red) -> `implementer` (green) -> `implementer` (refactor); `debug` if one pass of the debugging protocol doesn't resolve a failure | Code + tests | Tests green |
 | 6 | Review & QA | `reviewer`, `qa` | Findings logged in `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD` | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets threshold |

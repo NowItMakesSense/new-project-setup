@@ -124,6 +124,24 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertFalse((self.target / ".claude" / "agents" / "designer.md").exists())
 
+    def test_db_engine_set_generates_database_folder(self):
+        r = run_scaffold(self.target, base_answers(DB_ENGINE="postgresql"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.target / "Database" / "README.md").is_file())
+        self.assertTrue((self.target / "Database" / "er-diagram.md").is_file())
+        for kind in ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]:
+            self.assertTrue((self.target / "Database" / kind / "README.md").is_file(), kind)
+
+    def test_db_engine_none_omits_database_folder(self):
+        answers = base_answers(DB_ENGINE="none")
+        r = run_scaffold(self.target, answers)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.target / "Database").exists())
+        answers_path = self.target.parent / (self.target.name + "-answers.json")
+        v = run_verify(self.target, answers_path)
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("0 failure(s)", v.stdout)
+
     def test_npx_cmd_set_adds_mcp_server(self):
         r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

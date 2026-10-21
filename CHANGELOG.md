@@ -2,6 +2,14 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-21
+
+- **Feature-scoped diagram in `design.md`**: a new "Feature diagram" section, right after "Domain model" - entities/tables/screens touched by *that feature only*, never the whole project's schema. Mirrored in `spec-writer`'s `SKILL.md`, `references/spec-format.md`, and owned by `architect` (screens contributed by `designer` when present).
+- **New `Database/` folder, generated when `DB_ENGINE` indicates a database** (inferred from the existing interview answer - `none`/`nenhum`/`tbd`/empty omits it, no new question needed): the project's complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/`. Owned by `architect`; every feature that touches the database updates it (never silently replaces it) once `design.md` is approved. Static design artifacts only - same non-negotiable as the rest of the DB guard: never a live connection, real dump, or credentials.
+- **Per-feature `overview.html`** (conditional: only when a feature touches UI screens and/or the database): a single self-contained, static HTML/inline-SVG file - no CDN, no external dependency - summarizing affected screens, the feature's scoped diagram, and affected `Database/` objects, so a non-technical stakeholder can open it and understand the change at a glance.
+- `scaffold.py` gained `_HAS_DB` (derived from `DB_ENGINE`) and skips `Database/` templates when there's no database; `verify_setup.py` checks `Database/` existence (or absence) when `--answers` is given; `test_scaffold.py` covers both branches.
+- `knowledge-graph.md.tmpl` gained a line distinguishing `Database/er-diagram.md` (physical schema, owned by `architect`) from the knowledge graph (conceptual domain entities) - related but not the same artifact, never merged.
+
 ## 2026-10-20
 
 - **Model/effort selection**: `/orchestrate` asks once for the orchestrator's and each subagent's model (and, where supported, effort), records it in `docs/specs/STATUS.md`. Every agent file's frontmatter gained an explicit `model:` field (later retuned to role-tiered defaults - see below).

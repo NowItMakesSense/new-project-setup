@@ -18,6 +18,7 @@ AGENTS = ["planner", "architect", "domain", "test", "qa", "implementer", "review
           "devops-docs", "knowledge-graph", "debug"]
 OPTIONAL_AGENTS = ["designer"]
 SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
+DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
              "Bash(docker exec:*)", "Bash(aws secretsmanager get-secret-value:*)",
              "Read(./.env)", "Read(./.env.*)"]
@@ -152,6 +153,19 @@ def main() -> None:
     for sk in SKILLS:
         p = t / ".claude" / "skills" / sk / "SKILL.md"
         check(p.is_file() and frontmatter(p).get("name", "").strip() == sk, f"skill valid: {sk}")
+
+    if answers is not None:
+        db_engine = str(answers.get("DB_ENGINE", "")).strip().lower()
+        has_db = db_engine not in ("none", "nenhum", "tbd", "")
+        if has_db:
+            check((t / "Database" / "README.md").is_file(), "exists: Database/README.md")
+            check((t / "Database" / "er-diagram.md").is_file(), "exists: Database/er-diagram.md")
+            for kind in DATABASE_OBJECT_KINDS:
+                check((t / "Database" / kind / "README.md").is_file(), f"exists: Database/{kind}/README.md")
+        else:
+            check(not (t / "Database").exists(), "Database/ omitted (DB_ENGINE indicates no database)")
+    else:
+        print("INFO  no --answers given; skipping Database/ checks (pass --answers to verify this was expected)")
 
     leftovers = [str(p.relative_to(t)) for p in t.rglob("*")
                  if p.is_file() and ".git" not in p.parts and p.suffix in {".md", ".json", ".yml", ".py"}

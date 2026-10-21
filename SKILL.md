@@ -59,6 +59,8 @@ Tell the user how to continue: run `/plan-grill` in the new project (planning in
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
 | `docs/knowledge-graph/` | Domain model as a graph (MCP-backed when `NPX_CMD` is set; markdown fallback otherwise) |
+| `Database/` (only when `DB_ENGINE` indicates a database) | Complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature, never a live connection or real data |
+| `docs/specs/<feature>/overview.html` (conditional) | Self-contained static HTML/SVG, no external dependency, produced per feature when it touches UI screens and/or the database - affected screens, feature-scoped ER diagram, affected `Database/` objects |
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, with a one-time dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, feeding the next `/plan-grill` |

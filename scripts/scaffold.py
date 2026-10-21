@@ -58,6 +58,8 @@ def load_answers(path: Path) -> dict:
     values["EXTRA_DENY_ITEMS"] = "".join(",\n      " + json.dumps(x) for x in data["EXTRA_DENY"])
     values["_CI"] = str(data["CI_PROVIDER"]).strip().lower()
     values["_HAS_UI"] = str(data["HAS_UI"]).strip().lower()
+    db_engine = str(data["DB_ENGINE"]).strip().lower()
+    values["_HAS_DB"] = "no" if db_engine in ("none", "nenhum", "tbd", "") else "yes"
 
     priority = str(data["MODEL_PRIORITY"]).strip().lower()
     if priority not in TIER_PRESETS:
@@ -152,6 +154,8 @@ def main() -> None:
         if rel.as_posix().startswith(".github/") and values["_CI"] != "github-actions":
             continue
         if rel.as_posix() == ".claude/agents/designer.md.tmpl" and values["_HAS_UI"] != "yes":
+            continue
+        if rel.as_posix().startswith("Database/") and values["_HAS_DB"] != "yes":
             continue
         is_tmpl = src.suffix == ".tmpl"
         dest = target / (rel.with_suffix("") if is_tmpl else rel)

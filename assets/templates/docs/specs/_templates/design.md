@@ -7,6 +7,12 @@ Status: Draft | Date: | Approved by:
 ## Domain model
 Entities, value objects, aggregates (invariants), domain events.
 
+## Feature diagram
+Scope: only entities/tables/screens touched by *this* feature - never the whole project's schema (that lives in `Database/er-diagram.md`).
+- Entity/relationship diagram covering just this feature's entities (plain text/table notation - no external rendering dependency).
+- If this feature adds/changes UI screens: a simple flow/wireframe description of just the affected screens (owned by `designer`).
+- If this feature touches the database: list of affected `Database/` objects (new or modified tables/indexes/foreign-keys/primary-keys/packages/functions), linked into `Database/`.
+
 ## UX (if this feature has a UI)
 Information architecture, user flows/wireframes (text/Mermaid), design-system tokens/components used, accessibility (WCAG) criteria. Owned by `designer`; omit this section for UI-less features.
 
@@ -34,6 +40,9 @@ APIs, events, schemas.
 
 ## Test strategy
 Unit / integration / e2e. Persistence in tests: fakes, in-memory or disposable infra. NEVER the system database.
+
+## Visual overview (only if this feature touches UI screens and/or the database)
+A single self-contained `overview.html` next to this file - static HTML/inline SVG, no external dependency (no CDN) - rendering: affected screens (if any), this feature's entity/relationship diagram, and the list of affected `Database/` objects. Built so a non-technical stakeholder can open it in a browser and understand the change at a glance.
 
 ## ADRs
 Links to `docs/adr/`.
