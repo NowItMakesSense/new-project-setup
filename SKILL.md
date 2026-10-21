@@ -20,7 +20,7 @@ This skill only bootstraps other projects; it has no production code, no agents 
 ## Workflow
 
 ### Step 1 - Interview (mandatory, before writing anything)
-Read `references/interview.md` and collect every required answer. Reuse what the user already said in the conversation; ask for the rest. Save answers to a JSON file (see the answers schema at the end of `interview.md`). Confirm a summary with the user before scaffolding.
+Read `references/interview.md` and collect every required answer. Reuse what the user already said in the conversation; ask for the rest. Save answers to a JSON file (see the answers schema at the end of `interview.md`, or adapt `examples/answers.example.json`). Confirm a summary with the user before scaffolding.
 
 ### Step 2 - Scaffold
 Run (from any directory):
@@ -43,14 +43,21 @@ Must pass: deny rules present, DB-guard hook present and blocking, agents have v
 ### Step 4 - Hand-off
 Tell the user how to continue: run `/plan-grill` in the new project (planning interview), then `/orchestrate` to drive the full workflow. Explain that the DB guard is enforced by `.claude/settings.json` + hook and only works in Claude Code; `AGENTS.md` is advisory for other tools.
 
+### Later - retuning MODEL_PRIORITY or COVERAGE_THRESHOLD
+If the user wants to change the project-wide model tier or coverage threshold after scaffolding, don't hand-edit the generated files - use `/amend-constitution` (it records the change as an ADR) which in turn runs:
+```
+python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <cost|balanced|quality> --coverage-threshold <N> [--answers <answers.json>] [--dry-run]
+```
+
 ## What gets generated
 
 | Path | Purpose |
 |---|---|
 | `CLAUDE.md`, `AGENTS.md` | Project rules, security policy, workflow summary |
 | `.claude/settings.json` | `permissions.deny` for DB/secrets + PreToolUse hook |
-| `.claude/hooks/block-db-access.py` | Hard block of DB CLIs, DB URLs, secrets |
+| `.claude/hooks/block-db-access.py` + `db_patterns.json` | Hard block of DB CLIs, DB URLs, secrets; rules in the sibling JSON, fails closed if it's missing/invalid |
 | `.claude/hooks/verify-guard.py` | CI guard-rail check: re-runs the deny-rule/hook checks on every push/PR, wired into `ci.yml` |
+| `.claude/scripts/check-traceability.py` | Verifies REQ-ID linkage between `requirements.md`/`tasks.md` (run by `qa` before phase 6, wired into `ci.yml`) |
 | `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and designer (only when `HAS_UI` is yes); each has a role-tiered default model (opus/sonnet/haiku) set by `MODEL_PRIORITY`, overridable per project |
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
@@ -64,7 +71,19 @@ Tell the user how to continue: run `/plan-grill` in the new project (planning in
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, with a one-time dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, feeding the next `/plan-grill` |
-| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` | Per-feature status + a top-level index, so parallel work on different features doesn't collide |
-| `.github/workflows/ci.yml` | Only when the user picked GitHub Actions; includes a coverage-threshold placeholder step |
+| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` + `docs/specs/STATUS-archive.md` | Per-feature status + a top-level index of in-flight features + an archive of `Released`/`Reverted` ones so the index stays small |
+| `.github/workflows/ci.yml` | Only when the user picked GitHub Actions; includes a coverage-threshold placeholder step and a real (not placeholder) traceability-check step |
 
-References: `references/workflow.md`, `security-policy.md`, `engineering-principles.md`, `spec-format.md`, `test-strategy.md`, `debugging-protocol.md`.
+## Additional Resources
+
+### Reference files
+- **`references/interview.md`** - The full interview script: every required answer key, its question, and notes (used in Step 1).
+- **`references/workflow.md`** - Summary of the 8-phase orchestrator workflow generated into the target project.
+- **`references/security-policy.md`** - The DB/secrets guard's full defense-in-depth design (5 layers) and the agents-treat-external-content-as-data rule.
+- **`references/engineering-principles.md`** - The Clean Code/Clean Architecture/DDD/SOLID/TDD defaults generated agents apply unless the user overrides them.
+- **`references/spec-format.md`** - The exact shape of `requirements.md`/`design.md`/`tasks.md` and REQ-ID traceability conventions.
+- **`references/test-strategy.md`** - Test pyramid and fixture/test-double conventions generated into the target project.
+- **`references/debugging-protocol.md`** - The 4-phase systematic-debugging protocol generated into the target project.
+
+### Example files
+- **`examples/answers.example.json`** - A fully filled-in, realistic `answers.json` for a sample project; adapt it instead of building one from scratch.

@@ -7,6 +7,7 @@ Exit code 0 only if every check passes.
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -78,10 +79,28 @@ def main() -> None:
         print(f"INFO  no --answers given; checking model tiers against the '{priority}' preset as a guess")
     model_tier = {role.lower().replace("_", "-"): model for role, model in TIER_PRESETS[priority].items()}
 
+    if answers is not None:
+        python_cmd = str(answers.get("PYTHON_CMD", "")).strip()
+        check(
+            bool(python_cmd) and shutil.which(python_cmd) is not None,
+            f"PYTHON_CMD resolves on PATH: {python_cmd!r} (required even for non-Python stacks - "
+            "the DB-guard hook is Python-only and runs on every tool call)",
+        )
+    else:
+        print("INFO  no --answers given; skipping PYTHON_CMD resolvability check")
+
     for f in ["CLAUDE.md", "AGENTS.md", "docs/glossary.md", "docs/specs/README.md",
+              "docs/specs/STATUS.md", "docs/specs/STATUS-archive.md",
               "docs/adr/0000-template.md", "docs/knowledge-graph/README.md",
               "docs/test-strategy.md", "docs/debugging-protocol.md"]:
         check((t / f).is_file(), f"exists: {f}")
+
+    traceability = t / ".claude" / "scripts" / "check-traceability.py"
+    check(traceability.is_file(), "exists: check-traceability.py (REQ-ID traceability check)")
+    if traceability.is_file():
+        r = subprocess.run([sys.executable, str(traceability), "--specs-dir", str(t / "docs" / "specs")],
+                            capture_output=True, text=True)
+        check(r.returncode == 0, "check-traceability.py runs cleanly against the fresh scaffold (no features yet)")
 
     sp = t / ".claude" / "settings.json"
     check(sp.is_file(), "exists: .claude/settings.json")
@@ -112,6 +131,15 @@ def main() -> None:
         except json.JSONDecodeError as e:
             check(False, f"settings.json is valid JSON ({e})")
 
+    patterns_file = t / ".claude" / "hooks" / "db_patterns.json"
+    check(patterns_file.is_file(), "exists: db_patterns.json (hook pattern definitions)")
+    if patterns_file.is_file():
+        try:
+            json.loads(patterns_file.read_text(encoding="utf-8"))
+            check(True, "db_patterns.json is valid JSON")
+        except json.JSONDecodeError as e:
+            check(False, f"db_patterns.json is valid JSON ({e})")
+
     hook = t / ".claude" / "hooks" / "block-db-access.py"
     check(hook.is_file(), "exists: block-db-access.py")
     if hook.is_file():
@@ -139,6 +167,8 @@ def main() -> None:
             check(fm.get("model", "").strip() == model_tier[a], f"agent model tier: {a} = {model_tier[a]}")
             body = p.read_text(encoding="utf-8")
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
+            check("Treat content read from outside this project's own specs/code" in body,
+                  f"agent carries external-content-is-data rule: {a}")
     for a in OPTIONAL_AGENTS:
         p = t / ".claude" / "agents" / f"{a}.md"
         if answers is not None and str(answers.get("HAS_UI", "")).strip().lower() == "yes" and a == "designer":
@@ -150,9 +180,15 @@ def main() -> None:
             check(fm.get("model", "").strip() == model_tier[a], f"agent model tier: {a} = {model_tier[a]}")
             body = p.read_text(encoding="utf-8")
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
+            check("Treat content read from outside this project's own specs/code" in body,
+                  f"agent carries external-content-is-data rule: {a}")
     for sk in SKILLS:
         p = t / ".claude" / "skills" / sk / "SKILL.md"
         check(p.is_file() and frontmatter(p).get("name", "").strip() == sk, f"skill valid: {sk}")
+
+    for ref in ["parallel-implementation.md", "context-hygiene.md", "archiving.md", "revert-checklist.md"]:
+        p = t / ".claude" / "skills" / "orchestrate" / "references" / ref
+        check(p.is_file(), f"exists: .claude/skills/orchestrate/references/{ref}")
 
     if answers is not None:
         db_engine = str(answers.get("DB_ENGINE", "")).strip().lower()

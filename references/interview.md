@@ -10,7 +10,7 @@ Ask one topic at a time. Skip only what the user already stated explicitly. Neve
 | `PROJECT_DESCRIPTION` | One-paragraph description / problem it solves? | |
 | `DOC_LANGUAGE` | Language for docs and specs? (e.g. pt-BR, en) | Agent instructions stay in English |
 | `DOMAIN` | Business domain / industry? | May be TBD until planning |
-| `PROJECT_TYPE` | Web app, API, CLI, library, mobile, data pipeline, other? | |
+| `PROJECT_TYPE` | Web app, API, CLI, library, mobile, data pipeline, other? | If the user describes a monorepo with multiple independently-deployable services: this skill scaffolds one `CLAUDE.md`/`.claude/`/`Database/` per invocation, assuming one deployable unit - it has no multi-package overlay yet. Tell the user and ask whether to scaffold once per service (each into its own subdirectory, run `scaffold.py` once per service dir) or once at the repo root if the services genuinely share one `CLAUDE.md`/one database. Don't silently pick one. |
 | `STACK` | Language(s), frameworks, runtime? | Never assume; TBD allowed |
 | `TEST_CMD` | Command to run the test suite? | TBD allowed; filled after stack is known |
 | `LINT_CMD` | Lint/format command? | |
@@ -22,7 +22,7 @@ Ask one topic at a time. Skip only what the user already stated explicitly. Neve
 | `ENGINEERING_PRINCIPLES` | Keep defaults (Clean Code, Clean Architecture, TDD, DDD, SOLID) or override/remove any? | Default = keep all |
 | `COMPLIANCE` | Regulatory/security constraints (LGPD, GDPR, PCI, HIPAA, none)? | |
 | `TEAM` | Solo or team? Review process? | |
-| `PYTHON_CMD` | Python command available for the hook (`python`, `python3`, `py`)? | Detect with the user; hook needs Python 3 |
+| `PYTHON_CMD` | Python command available for the hook (`python`, `python3`, `py`)? | Required even if the project's own stack has no Python - the DB-guard hook is Python-only and runs on every tool call regardless of language. Run `<answer> --version` yourself (or ask the user to) before recording it; don't just take the name on faith - `verify_setup.py` checks it resolves on PATH, but catching a typo here saves a failed verify later. |
 | `NPX_CMD` | npx command for the knowledge-graph MCP memory server, or `none` if Node.js isn't available? | Try `npx --version` yourself first (look before asking); only ask if that's inconclusive. `none` disables `mcpServers` and falls back to a markdown-only graph. |
 | `HAS_UI` | Does this project have a user-facing UI (web/mobile/desktop front-end)? | `yes`/`no`. Gates whether the `designer` agent is generated. |
 | `MODEL_PRIORITY` | Optimize the agent team for `cost`, `balanced`, or `quality`? | Sets the default model tier per agent (`cost` = no `opus` anywhere; `balanced` = `opus` for architect/security/reviewer/debug, default; `quality` = `opus` also for domain/knowledge-graph). Still overridable per project later in `/orchestrate`. |
