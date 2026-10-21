@@ -1,0 +1,24 @@
+# {{PROJECT_NAME}} - entity-relationship diagram (complete)
+
+Status: Draft | Last updated: | Updated by:
+
+This is the **complete, authoritative** ER diagram for the whole project. It is extended, never replaced, each time a feature touches the database (see `docs/specs/<feature>/design.md` -> "Feature diagram"). A single feature's own diagram only ever shows the entities/tables *that feature* touches; this file is the only place the full picture lives.
+
+## Entities and relationships
+
+List every table with its key columns and relationships (plain text/table notation - no external rendering dependency):
+
+```
+<Table> (<PK column>)
+  - <column>: <type> [constraints]
+  - ...
+  relationships:
+  - <Table> <1-N|N-N|1-1> <OtherTable> via <fk column> [on delete: ...]
+```
+
+## Added by feature
+
+| Feature | Objects added/changed | Date |
+|---|---|---|
+
+Keep this table in sync with `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - it is the changelog that lets a reader trace which feature introduced which object.

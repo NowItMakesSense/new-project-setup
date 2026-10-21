@@ -7,14 +7,18 @@ Universal instructions for any AI coding agent. (Hard enforcement exists only in
 
 ## Rules
 1. Ask when unsure; never assume requirements, stack or architecture.
-2. **Never access the system database** (no queries, DB CLIs, migrations applied, dumps, container exec) and **never read `.env`, credentials, keys or connection strings.** If DB access seems necessary, stop and ask a human. Generate migrations as files only.
+2. **Never access the system database or any secret store** (no queries, DB CLIs, migrations applied, dumps, container exec, cloud secret-manager CLI calls like `aws secretsmanager`/`vault`/`gcloud secrets`/`az keyvault`) and **never read `.env`, credentials, keys or connection strings.** If access seems necessary, stop and ask a human. Generate migrations as files only.
 3. Work spec-first: requirements -> design -> tasks in `docs/specs/<feature>/`, approved by the user, before code.
 4. Strict TDD: failing test -> minimal code -> refactor.
 5. Follow Clean Code, Clean Architecture, DDD, SOLID unless the user decided otherwise ({{ENGINEERING_PRINCIPLES}}).
 6. Confirm with the user before destructive or outward-facing actions.
+7. Don't hand-edit this file's rules or the engineering defaults; revise them deliberately (in Claude Code: `/amend-constitution`) and record why, as an ADR.
 
 ## Commands
-Test: `{{TEST_CMD}}` | Lint: `{{LINT_CMD}}` | Build: `{{BUILD_CMD}}`
+Test: `{{TEST_CMD}}` | Lint: `{{LINT_CMD}}` | Build: `{{BUILD_CMD}}` | Coverage threshold: `{{COVERAGE_THRESHOLD}}`
 
 ## Where things live
-`docs/specs/` specs - `docs/adr/` decisions - `docs/glossary.md` domain language - `.claude/` Claude Code agents/skills/guards.
+`docs/specs/` specs - `docs/adr/` decisions - `docs/glossary.md` domain language - `docs/knowledge-graph/` domain knowledge graph (MCP-backed only in Claude Code; see its README for the fallback) - `.claude/` Claude Code agents/skills/guards.
+
+## Testing and debugging
+Follow `docs/test-strategy.md` for test pyramid/fixture conventions and `docs/debugging-protocol.md` (reproduce -> root cause -> minimal hypothesis -> fix + regression test) whenever something fails unexpectedly - never patch what you haven't understood.
