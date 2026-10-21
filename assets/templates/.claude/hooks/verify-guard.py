@@ -55,6 +55,15 @@ def main() -> None:
         except json.JSONDecodeError as e:
             check(False, f"settings.json is valid JSON ({e})")
 
+    patterns_file = ROOT / ".claude" / "hooks" / "db_patterns.json"
+    check(patterns_file.is_file(), "exists: db_patterns.json (hook pattern definitions)")
+    if patterns_file.is_file():
+        try:
+            json.loads(patterns_file.read_text(encoding="utf-8"))
+            check(True, "db_patterns.json is valid JSON")
+        except json.JSONDecodeError as e:
+            check(False, f"db_patterns.json is valid JSON ({e})")
+
     hook = ROOT / ".claude" / "hooks" / "block-db-access.py"
     check(hook.is_file(), "exists: block-db-access.py")
     if hook.is_file():

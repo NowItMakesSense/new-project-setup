@@ -8,7 +8,7 @@ description: Planning interview in the style of grill-me - relentlessly question
 If a skill named `grill-me` is installed (check the available skills list), invoke it for the interview and then continue at "Record" below. Otherwise run the interview yourself as follows.
 
 ## Interview rules
-1. **One question at a time.** For each, offer your recommended answer and the reasoning; the user may accept or change it.
+1. **One question at a time.** For each, offer a recommended answer and the reasoning; the user may accept or change it.
 2. **Never assume.** Do not fill gaps with defaults. "I don't know" -> record as open question and revisit.
 3. **Walk the decision tree.** Resolve dependencies between decisions in order; revisit earlier answers when a later one contradicts them.
 4. **Look before asking.** If the answer is in the repo or docs, read it instead of asking (then confirm briefly).

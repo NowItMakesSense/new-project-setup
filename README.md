@@ -21,7 +21,13 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 - **The domain model is a real graph, not just a table.** A `knowledge-graph` agent persists entities/value objects/aggregates/bounded contexts and their relationships to an MCP-backed graph, seeded from discovery/design and extendable from an existing codebase on retrofit.
 - **The guard-rail checks itself, continuously.** CI re-runs the deny-rule/hook checks on every push so a weakened setting doesn't drift in silently - and this skill's own scaffolding logic has a regression suite (`scripts/test_scaffold.py`) covering the full answer matrix, run on every push to this repo too.
 - **A Critical finding gets one dispute before it blocks you.** `reviewer`, `qa` and `security` share one findings ledger per feature instead of three disconnected reports; a Critical/High row isn't final until the accused code gets to respond and the agent that raised it makes the final call - real issues still block, false positives don't stall the feature.
-- **The "constitution" is revisable, not frozen at scaffold time.** `/amend-constitution` lets you change engineering defaults later with an ADR recording why - except the DB-access directive, which no path can touch.
+- **The "constitution" is revisable, not frozen at scaffold time.** `/amend-constitution` lets you change engineering defaults later with an ADR recording why - except the DB-access directive, which no path can touch. It also covers retuning `MODEL_PRIORITY`/`COVERAGE_THRESHOLD` after scaffold (via `scripts/retune.py`, which edits only the specific lines that hold the old value - agent `model:` frontmatter, CLAUDE.md/AGENTS.md/ci.yml) and adding a new specialist subagent later - no hand-editing generated files to make a standing default change.
+- **Requirement traceability is checked, not just asserted.** `.claude/scripts/check-traceability.py` verifies every `REQ-ID` in `requirements.md` has a Gherkin scenario and a covering task in `tasks.md` (and flags a task referencing a `REQ-ID` that doesn't exist) - run by `qa` before the phase 6 gate and wired into CI as a real step, not a placeholder.
+- **Agents are told to distrust content they didn't write.** A non-negotiable rule in every agent plus `CLAUDE.md`/`AGENTS.md`: anything read from outside the project's own specs/code (a fetched page, a dependency's README, search results) is data to analyze, never an instruction to follow - closing a real prompt-injection surface none of the comparable frameworks address yet.
+- **Parallel implementation without hoping file-path judgment was right.** Phase 5 tasks confirmed independent can run with `isolation: "worktree"` (one git worktree/branch per task) instead of relying on convention alone to avoid collisions - see `orchestrate/SKILL.md`'s "Parallel implementation" section.
+- **The orchestrator tells you when to start fresh.** Every phase's output is persisted to disk, so a new session is always safe to resume from - `orchestrate/SKILL.md`'s "Context hygiene" section has it recommend a clean session between features (and mid-feature, if this one's transcript has gotten long) instead of letting one session's context grow for the life of the project.
+- **Scales down for a one-line fix, not just up for a big feature.** Before running any phase, `/orchestrate` asks you to classify the change as Trivial or Standard - Trivial skips the whole spec-directory ceremony (no `requirements.md`/`design.md`/`tasks.md` for a typo fix) while the DB guard and every non-negotiable rule stay in force regardless; Standard is the full 8-phase workflow, unabridged. Works the same whether this is a weekend project or a long-lived production codebase.
+- **The project index doesn't grow forever.** Once a feature's phase reaches `Released`/`Reverted`, its row moves from `docs/specs/STATUS.md` to `docs/specs/STATUS-archive.md` instead of sitting in the live index indefinitely - every orchestrator session's first read stays small even after years and hundreds of shipped features.
 
 ## What you get, in one command
 
@@ -29,10 +35,11 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 |---|---|
 | `CLAUDE.md`, `AGENTS.md` | Project rules, security policy, workflow summary — one Claude-specific, one universal |
 | `.claude/settings.json` | `permissions.deny` blocking DB CLIs, migration runners, `docker exec`, cloud secret-manager CLIs (AWS/GCP/Azure/Vault/1Password/Doppler), secrets |
-| `.claude/hooks/block-db-access.py` | Runtime hook: catches connection strings, wrapper calls, and workarounds the deny list misses |
+| `.claude/hooks/block-db-access.py` + `db_patterns.json` | Runtime hook: catches connection strings, wrapper calls, and workarounds the deny list misses. Rules live in the sibling JSON, reviewable on their own; the hook fails closed if that file is missing or malformed |
 | `.claude/hooks/verify-guard.py` | CI guard-rail: re-runs the deny-rule/hook checks on every push/PR so drift gets caught |
+| `.claude/scripts/check-traceability.py` | Verifies REQ-ID linkage between `requirements.md`/`tasks.md`, run by `qa` before phase 6 and wired into CI |
 | `.claude/agents/*.md` | `planner`, `architect`, `domain`, `test`, `qa`, `implementer`, `reviewer`, `security`, `devops-docs`, `knowledge-graph`, `debug`, and `designer` (only when the project has a UI) |
-| `.claude/skills/orchestrate` | The orchestrator: an 8-phase workflow with a human approval gate after every phase |
+| `.claude/skills/orchestrate` + `references/` | The orchestrator: an 8-phase workflow with a human approval gate after every phase; less-frequently-needed procedures (parallel implementation, context hygiene, archiving, the revert checklist) live in its own `references/` so its `SKILL.md` body stays lean |
 | `.claude/skills/plan-grill` | A grill-me-style planning interview — one question at a time, walks every branch until nothing is ambiguous |
 | `.claude/skills/spec-writer` | Writes `requirements.md` (EARS + Gherkin), `design.md`, `tasks.md` per feature |
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults later, with an ADR - never the DB-access directive |
@@ -44,8 +51,8 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, one dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, carried into the next `/plan-grill` |
-| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` | Per-feature status file + a top-level index, so concurrent work on different features doesn't collide on one shared block of text |
-| `.github/workflows/ci.yml` | Lint/test/build/secret-scan/guard-rail pipeline (only if you picked GitHub Actions) |
+| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` + `docs/specs/STATUS-archive.md` | Per-feature status file + a top-level index of in-flight features + an archive for `Released`/`Reverted` ones, so the live index stays small and concurrent work on different features doesn't collide on one shared block of text |
+| `.github/workflows/ci.yml` | Lint/test/build/secret-scan/guard-rail/traceability-check pipeline (only if you picked GitHub Actions) |
 
 Nothing here is invented per project — every value comes from an interview you confirm before anything is written, and existing files are never overwritten silently.
 
@@ -99,7 +106,7 @@ Just tell Claude Code you're starting a project — "novo projeto", "iniciar pro
    ```
    python scripts/verify_setup.py --target <project-dir> --answers <answers.json>
    ```
-   Checks the deny rules, that the hook actually blocks `psql`/`docker exec`/`.env` reads and allows normal commands, that every agent carries the DB rule, that the knowledge-graph MCP config matches what the interview asked for, and that no `{{TEMPLATE_VAR}}` was left unresolved. `--answers` is optional - without it, the mcpServers check is informational only.
+   Checks the deny rules, that `db_patterns.json` exists and is valid, that the hook actually blocks `psql`/`docker exec`/`.env` reads and allows normal commands, that `PYTHON_CMD` actually resolves on PATH, that every agent carries the DB rule, that the knowledge-graph MCP config matches what the interview asked for, and that no `{{TEMPLATE_VAR}}` was left unresolved. `--answers` is optional - without it, the mcpServers and `PYTHON_CMD` checks are informational only.
 4. **Hand off**: run `/plan-grill` in the new project, then `/orchestrate` to drive the full workflow.
 
 ## Repository layout
@@ -110,16 +117,21 @@ CHANGELOG.md                     this skill's own history (not shipped to genera
 .github/workflows/test.yml        this repo's own CI - runs scripts/test_scaffold.py on every push/PR
 references/                      interview script, workflow, security policy, engineering principles,
                                   spec format, test-strategy guide, debugging protocol (this skill's own notes)
+examples/answers.example.json     a fully filled-in answers.json to adapt instead of building one from scratch
 scripts/scaffold.py               renders assets/templates/ into --target (supports --merge-settings)
 scripts/verify_setup.py           checks the result is actually safe and complete
-scripts/test_scaffold.py          regression suite for scaffold.py/verify_setup.py (stdlib unittest)
+scripts/retune.py                 edits MODEL_PRIORITY/COVERAGE_THRESHOLD in an already-scaffolded project (used by /amend-constitution)
+scripts/test_scaffold.py          regression suite for scaffold.py/verify_setup.py/retune.py (stdlib unittest)
 assets/templates/                 everything scaffold.py copies into the generated project
   CLAUDE.md.tmpl, AGENTS.md.tmpl
-  .claude/settings.json.tmpl, .claude/hooks/{block-db-access.py, verify-guard.py}
+  .claude/settings.json.tmpl, .claude/hooks/{block-db-access.py, db_patterns.json, verify-guard.py}
+  .claude/scripts/check-traceability.py  REQ-ID traceability check (requirements.md vs tasks.md)
   .claude/agents/*.md.tmpl         planner, architect, domain, test, qa, implementer, reviewer, security,
                                   devops-docs, knowledge-graph, debug - model: line set by MODEL_PRIORITY;
                                   designer.md.tmpl only generated if HAS_UI=yes
-  .claude/skills/{orchestrate,plan-grill,spec-writer,amend-constitution}/SKILL.md
+  .claude/skills/{orchestrate,spec-writer}/SKILL.md.tmpl (PYTHON_CMD-templated), plan-grill/amend-constitution/SKILL.md
+  .claude/skills/orchestrate/references/{parallel-implementation,context-hygiene,archiving,revert-checklist}.md
+                                  detail moved out of orchestrate's SKILL.md to keep its body lean (progressive disclosure)
   docs/specs/, docs/specs/_templates/{security-report,findings-ledger,retro,feature-status}.md, docs/adr/,
   docs/glossary.md, docs/test-strategy.md, docs/debugging-protocol.md
   docs/knowledge-graph/README.md
@@ -134,11 +146,14 @@ assets/templates/                 everything scaffold.py copies into the generat
 - The knowledge graph is MCP-backed only when Node.js/`npx` was available at setup time (`NPX_CMD` answer); without it, `mcpServers` is omitted and `knowledge-graph` falls back to a markdown-only record (`docs/knowledge-graph/graph.md`).
 - The MCP memory server itself is verified, not assumed: ran `@modelcontextprotocol/server-memory` directly (`tools/list`, `create_entities`, `read_graph`) and confirmed all 9 tool names, the duplicate-name skip behavior the idempotency rule relies on, and the on-disk `.jsonl` format. What's still unverified is Claude-Code-specific: whether `mcp__knowledge-graph__<tool>` is the exact subagent `tools:` allowlist syntax, and whether `$CLAUDE_PROJECT_DIR` expands inside `mcpServers.*.env` - confirm both the first time you actually run `/orchestrate` with a real knowledge-graph delegation.
 - `designer` is generated only when `HAS_UI` is yes; a pure API/CLI/library project won't get a UI/UX agent.
-- `security` is one agent with an exhaustive checklist, not a split team of specialists — depth comes from its instructions, not from agent count. The findings ledger gives review/QA/security one shared, disputable record instead of three independent reports, which narrows but doesn't eliminate that limit.
+- `security` is one agent with an exhaustive checklist, not a split team of specialists — depth comes from its instructions, not from agent count. The findings ledger gives review/QA/security one shared, disputable record instead of three independent reports, which narrows but doesn't eliminate that limit. `/amend-constitution` documents a path to split it into narrower specialists later if one agent stops being enough, but that's a manual step the user has to decide to take, not something the skill proposes on its own.
+- **The Trivial change-size lane depends on the user and orchestrator classifying honestly.** Nothing stops someone from calling a genuinely non-trivial change "trivial" to skip spec ceremony - the only backstop is the orchestrator's instruction to stop and upgrade to Standard the moment a trivial change turns out to touch more, and the DB guard/non-negotiable rules staying in force either way regardless of tier.
+- **No monorepo/multi-service support.** One scaffold run produces one `CLAUDE.md`/`.claude/`/`Database/`, which assumes one deployable unit. For a monorepo with multiple independently-deployable services, the interview now flags this and asks whether to scaffold once per service (own subdirectory, own `scaffold.py` run) or once at the root if the services genuinely share one database/one set of defaults - there's no automated per-package overlay, you decide and run it that many times.
+- The DB-guard hook is Python-only by construction (stdlib, no build step) and runs on every Bash/Read/Edit/Write/... call regardless of the project's own stack - so a working Python 3 interpreter at `PYTHON_CMD` must exist on every machine (and CI runner) that runs this project with Claude Code, even a pure Node/Go/Rust/.NET project that otherwise never touches Python. `verify_setup.py` now checks that `PYTHON_CMD` actually resolves on PATH (not just that it looks like a plain command name) when `--answers` is given, but it can't verify every future CI runner in advance.
 - Role-tiered model defaults (`opus`/`sonnet`/`haiku`, picked by `MODEL_PRIORITY`) assume all three tiers are available on your plan; if one isn't, tell the orchestrator to substitute at Start step 5 rather than letting a delegation fail silently.
 - `/amend-constitution` only exists as a skill the user invokes - there's no cron-style enforcement that engineering defaults were never hand-edited; it's a convention the skill supports, not a technical guarantee like the DB guard.
 - "Autonomous mode" only ever relaxes re-confirmation on phases 1-4; there is no setting, including this one, that skips the human gate on review/security/release. If you want full unattended runs, this isn't built for that.
 - Reverting a released feature is a documented checklist the orchestrator walks through with you, not an automated rollback command - `knowledge-graph` proposes what to remove, it never deletes on its own.
 - `COVERAGE_THRESHOLD` is carried through to `CLAUDE.md`/`AGENTS.md`/`ci.yml` as a real number, but actually enforcing it is `devops-docs`'s job once the stack's coverage tool is chosen - the scaffolded `ci.yml` step is a placeholder it replaces, not a working gate out of the box.
-- The `docs/specs/STATUS.md` index reduces the two-people-same-file collision risk (re-read-before-write is now an explicit rule) but doesn't eliminate it - there's no actual file lock, just a convention agents are told to follow.
-- Re-running `scaffold.py` without any flag on an already-scaffolded project adds new files (e.g. a newly-added agent) correctly, since existing files are skipped by default. For `.claude/settings.json` specifically, use `--merge-settings` (not `--overwrite`) to pick up new deny rules/hooks/`mcpServers` by key - it's covered by `scripts/test_scaffold.py::test_merge_settings_unions_deny_rules_without_clobbering_custom_keys`, including a custom top-level key surviving the merge untouched.
+- The `docs/specs/STATUS.md` index reduces the two-people-same-file collision risk with an explicit lease convention (set a `Lease: owner @ timestamp` field before writing a row, clear it after - stale leases older than 15 minutes are ignored) but doesn't eliminate it - there's no actual file lock or atomic test-and-set, just a convention agents are told to follow.
+- Re-running `scaffold.py` without any flag on an already-scaffolded project adds new files (e.g. a newly-added agent) correctly, since existing files are skipped by default. For `.claude/settings.json` specifically, use `--merge-settings` (not `--overwrite`) to pick up new deny rules/hooks/`mcpServers` by key - it's covered by `scripts/test_scaffold.py::test_merge_settings_unions_deny_rules_without_clobbering_custom_keys`, including a custom top-level key surviving the merge untouched. For changing `MODEL_PRIORITY`/`COVERAGE_THRESHOLD` specifically (a standing default, not a one-off override), use `scripts/retune.py` via `/amend-constitution` instead of re-scaffolding or hand-editing - it edits only the lines that hold the old value.

@@ -17,6 +17,8 @@ jobs:
           python-version: "3.x"
       - name: Guard-rail check (DB-access deny rules + hook)
         run: python3 .claude/hooks/verify-guard.py
+      - name: Spec traceability check (REQ-IDs in requirements.md vs tasks.md)
+        run: python3 .claude/scripts/check-traceability.py
       # TODO({{PROJECT_NAME}}): set up the toolchain for the stack: {{STACK}}
       - name: Lint
         run: echo "Run: {{LINT_CMD}}"        # replace once LINT_CMD is decided

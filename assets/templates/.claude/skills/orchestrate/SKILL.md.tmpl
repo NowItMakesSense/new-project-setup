@@ -1,0 +1,89 @@
+---
+name: orchestrate
+description: Orchestrate the full software development workflow of this project by delegating to specialist subagents, with human approval gates between phases (discovery, specs, architecture, tasks, TDD, review, security, release). Use when the user wants to build a feature or start/continue the project workflow, says "orchestrate", "start development", "next phase", or "implement feature".
+---
+
+# Orchestrator
+
+Coordinate delegation; never write production code or touch the database directly (see CLAUDE.md prime directives). **Ask, never assume.**
+
+## Start
+1. Read `CLAUDE.md` and `docs/specs/STATUS.md` (the project index - create it if missing). It should only ever hold features still in flight; if a row's own feature-level status already says `Released`/`Reverted`, see "Archiving" below before moving on.
+2. Ask the user which feature/phase to work on. Do not infer. Follow `docs/specs/STATUS.md`'s own "Concurrency (lease convention)" section - set/clear the `Lease` field on every write to a row there, including later in this workflow, not just here at Start.
+3. Classify the change size with the user - see "Change size" below. This decides whether step 4 even applies.
+4. If Standard: read (or create) that feature's own `docs/specs/<feature>/STATUS.md` (template: `docs/specs/_templates/feature-status.md`) and `docs/specs/discovery.md`. If Trivial: skip this - there is no feature directory.
+5. (Standard only) If discovery is missing or has `TBD`/open questions -> run `/plan-grill` first.
+6. Ask the user (offer "keep defaults" as a valid answer) which model and effort level to use:
+   - For the orchestrator session itself.
+   - For the subagents - each already has a role-tiered default in its own frontmatter, set at scaffold time by the `MODEL_PRIORITY` answer. Ask whether to keep those per-agent defaults or override any of them - if a tier isn't available on the user's plan, substitute the nearest available model for that role rather than failing silently.
+   Record the choice in `docs/specs/STATUS.md` (the index) under "Models & effort" so it persists across phases, features and sessions; skip re-asking while it stays unchanged.
+7. (Standard only) Check whether a knowledge graph already exists (MCP-backed: ask `knowledge-graph` to `read_graph` and see if it's non-empty; fallback mode: check whether `docs/knowledge-graph/graph.md` exists with content). If source code already exists in the project but no graph does, this is a retrofit: delegate to `knowledge-graph` to analyze the existing code/docs and propose an initial graph; present the proposal and get the user's confirmation before continuing. If a graph already exists, do nothing extra here - `knowledge-graph` extends it later in phases 1 and 3. Skip this step for a brand-new, empty project (nothing to retrofit) or for a Trivial change.
+8. (Standard only) Ask if the user wants "autonomous mode" for this session (off by default): if accepted, phases 1-4 proceed without re-confirming each gate individually - still present what each phase produced, just skip waiting for an explicit yes before moving to the next of phases 1-4. Phases 6, 7 and 8 **always** stop for human confirmation regardless of this setting - they gate review/security/release, which stay human-gated no matter what the user opts into.
+
+## Change size (ask before choosing a path)
+Ask the user to classify the change - never infer it from the request's wording alone:
+- **Trivial**: typo/comment fix, dependency-version bump, one-line fix with no behavior or architecture change, nothing that needs a new `REQ-ID`. Skip the feature directory and phases 1-4 entirely - no `discovery.md`/`requirements.md`/`design.md`/`tasks.md` for it. Go straight to: make the change with a regression test if one doesn't already cover it (phase 5 equivalent) -> `reviewer` does a quick pass (phase 6 equivalent, `qa`/the findings-ledger ritual only if `reviewer` actually finds something) -> a quick `security`/`devops-docs` pass (phases 7-8, abbreviated, not skipped) -> user confirms. Log it as a single row in the top-level `docs/specs/STATUS.md` index with Phase `Trivial (done)` and a one-line description; it never gets its own `docs/specs/<feature>/` directory.
+- **Standard** (the default - ask again rather than defaulting here if genuinely unsure): the full 8-phase workflow below, unabridged.
+
+Trimming ceremony never trims a guard rail: the DB-access guard, every agent's non-negotiable rules, and the human gates on security/release apply identically regardless of tier - this only decides which *spec artifacts* get produced, never whether the rules apply.
+If a "Trivial" change turns out to touch more than first thought (a behavior change a user would notice, a new dependency surface, anything crossing a bounded context or touching the database/UI) - stop, tell the user, and upgrade it to Standard rather than finishing it through the trivial lane.
+
+## Model & effort
+- Model is set per call: when delegating via the Agent/Task tool, pass the chosen model explicitly in that call's `model` parameter (`sonnet`, `opus`, `haiku`, `fable`, or a full model id). This overrides, for that invocation only, whatever `model:` the subagent's `.claude/agents/<role>.md` frontmatter declares (its role-tiered default, or `inherit` if the user asked to just match the session).
+- Effort has no verified per-call override in this environment. To change it:
+  - For the orchestrator session: set it for the session (slash command or CLI flag, if the installed Claude Code build offers one) before delegating.
+  - For a subagent: it runs with the main session's effort unless that subagent's own `.claude/agents/<role>.md` sets an `effort:` field in its frontmatter - only add/edit that field after confirming the installed Claude Code version honors it; otherwise note the limitation to the user instead of guessing.
+- Never invent a model name or effort level the user did not state; if unsure what their build supports, ask or point them to `claude --help` / `/model`.
+
+## Phases (Standard path; never skip a phase it includes; each ends with a human gate - see "Change size" above for the Trivial path)
+| # | Phase | Delegate to | Output | Gate |
+|---|---|---|---|---|
+| 1 | Discovery | `planner` + `/plan-grill`; `knowledge-graph` seeds/retrofits | `docs/specs/discovery.md`; initial knowledge graph | User confirms summary |
+| 2 | Requirements | `planner` + `/spec-writer` | `requirements.md` | User approves |
+| 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md` (incl. feature diagram), ADRs, glossary, threat model, updated knowledge graph, `Database/` update + `overview.html` (if the feature touches UI/DB) | User approves |
+| 4 | Tasks | `planner` | `tasks.md` (TDD-sized) | User approves |
+| 5 | TDD loop, per task | `test` (red) -> `implementer` (green) -> `implementer` (refactor); `debug` if one pass of the debugging protocol doesn't resolve a failure | Code + tests | Tests green |
+| 6 | Review & QA | `reviewer`, `qa` | Findings logged in `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD`; `check-traceability.py` run clean | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets threshold AND traceability check passes |
+| 7 | Security | `security` | `security-report.md` (ASVS checklist); findings in the shared ledger | No `Open`/`Confirmed` Critical/High in the ledger |
+| 8 | CI/CD & docs | `devops-docs` | Pipeline, README, changelog | User confirms |
+| - | Retro | orchestrator, after phase 8 | `docs/specs/<feature>/retro.md` | Carried-forward items applied to STATUS.md/next `/plan-grill` |
+
+## Delegation rules
+- Give each subagent only: the task, the relevant spec paths, constraints. Require it to report back questions instead of guessing.
+- Apply the model (and, where supported, effort) chosen in "Model & effort" above on every delegation; if a specific task warrants a one-off exception (e.g. a hard security review needs a stronger model), say so and ask before deviating from the recorded default.
+- `knowledge-graph` must check the existing graph (via `read_graph`/`search_nodes`, or `docs/knowledge-graph/graph.md` in fallback mode) before creating anything; treat this as a non-negotiable idempotency rule, same tier as the DB-access refusal.
+- A Critical/High finding in `findings-ledger.md` never blocks on its first report: relay it to the responsible agent (usually `implementer`) for a fix or a disputed response, then relay that response back to whichever agent raised it (`reviewer`/`qa`/`security`) for the final `Confirmed`/`Retracted` call. Only `Open` or `Confirmed` Critical/High rows block phases 6-7. That `Confirmed`/`Retracted` call is final between the two agents - if `implementer` still disagrees after `Confirmed`, don't loop them again; bring the disagreement to the user as the tie-breaker instead.
+- Subagent questions are relayed to the user (AskUserQuestion), never answered directly.
+- For independent tasks worth running in parallel, see "Parallel implementation" below instead of relying on file-path judgment alone.
+- If one pass of `docs/debugging-protocol.md` by `implementer`/`qa` doesn't resolve a failure, delegate to `debug` instead of letting the same agent retry the same approach again.
+- After each phase, update that feature's own `docs/specs/<feature>/STATUS.md` (phase, decisions, open questions), and the row for this feature in the top-level `docs/specs/STATUS.md` index (phase, last updated) - follow the index's lease convention (set `Lease` before writing, clear it after) in case another session is touching the same row. Once that row's phase becomes `Released` or `Reverted`, move it to the archive instead of leaving it - see "Archiving" below.
+- Before presenting a phase's artifact for the human gate, confirm the agent reports it re-read its own output (no empty required section, no open questions left in a doc about to be approved); send it back to the agent instead of forwarding an incomplete draft to the user.
+- If code must deviate from a spec: stop, update the spec, get approval, then continue.
+- If any agent reports it needs DB access or secrets (including a cloud secret-manager CLI call): refuse, explain, ask the user for a human-run alternative or a fake/fixture.
+
+## Parallel implementation (optional, phase 5 only)
+Only for two or more phase-5 tasks confirmed independent - no shared files, no ordering dependency. Delegate each with git-worktree isolation (`isolation: "worktree"`) instead of relying on file-path judgment alone to avoid collisions; merging a worktree branch back still needs human confirmation, same as any other outward-facing git operation. Full procedure: `references/parallel-implementation.md`.
+
+## Context hygiene
+Every phase's output is persisted to disk before its gate closes, so a fresh orchestrator session can always resume safely instead of carrying this one's growing transcript forward. Recommended between features, always, and mid-feature once this session's transcript has gotten long enough that re-reading `STATUS.md` would recover the same state for free. Full guidance: `references/context-hygiene.md`.
+
+## Done criteria
+- **Standard**: all requirement IDs traced to passing tests (verified with `{{PYTHON_CMD}} .claude/scripts/check-traceability.py --feature <feature>`, not just asserted), review and security gates closed, docs updated, user confirmed.
+- **Trivial**: the regression test (new or pre-existing) is green, `reviewer` signed off, the DB guard is untouched, user confirmed.
+
+## After release: retro
+Once phase 8 is confirmed, write `docs/specs/<feature>/retro.md` (copy from `docs/specs/_templates/retro.md`) with the user - what went well, what to adjust, and anything that should change `docs/specs/discovery.md`, `CLAUDE.md` defaults (via `/amend-constitution`, never edited directly), or the "Models & effort" table in the `docs/specs/STATUS.md` index. Apply the carried-forward items before starting the next feature's `/plan-grill`, don't just file them away. This is also the natural point to suggest a fresh session for the next feature - see `references/context-hygiene.md`.
+
+## If a released feature needs reverting
+Not automated - git-revert the code (human-confirmed) -> mark the feature's status `Reverted` with the reason -> record an ADR -> ask `knowledge-graph` to propose (never auto-delete) removing entities that came only from this feature -> note it in `retro.md`. Full checklist: `references/revert-checklist.md`.
+
+## Archiving
+`docs/specs/STATUS.md` only holds features still in flight - the moment a row reaches `Released`/`Reverted`, move it to `docs/specs/STATUS-archive.md` instead of leaving it there to grow the index forever. Full procedure: `references/archiving.md`.
+
+## Additional Resources
+
+### Reference files
+- **`references/parallel-implementation.md`** - Step-by-step procedure for running independent phase-5 tasks concurrently with git-worktree isolation.
+- **`references/context-hygiene.md`** - When and why to start a fresh orchestrator session instead of continuing a long-running one.
+- **`references/archiving.md`** - Procedure for moving a feature's row out of the live `STATUS.md` index once it's `Released`/`Reverted`.
+- **`references/revert-checklist.md`** - The checklist to follow when a released feature needs reverting.
