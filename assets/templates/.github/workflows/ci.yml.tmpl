@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Guard-rail check (DB-access deny rules + hook)
+        run: python3 .claude/hooks/verify-guard.py
       # TODO({{PROJECT_NAME}}): set up the toolchain for the stack: {{STACK}}
       - name: Lint
         run: echo "Run: {{LINT_CMD}}"        # replace once LINT_CMD is decided

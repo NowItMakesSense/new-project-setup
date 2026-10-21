@@ -23,6 +23,8 @@ Ask one topic at a time. Skip only what the user already stated explicitly. Neve
 | `COMPLIANCE` | Regulatory/security constraints (LGPD, GDPR, PCI, HIPAA, none)? | |
 | `TEAM` | Solo or team? Review process? | |
 | `PYTHON_CMD` | Python command available for the hook (`python`, `python3`, `py`)? | Detect with the user; hook needs Python 3 |
+| `NPX_CMD` | npx command for the knowledge-graph MCP memory server, or `none` if Node.js isn't available? | Try `npx --version` yourself first (look before asking); only ask if that's inconclusive. `none` disables `mcpServers` and falls back to a markdown-only graph. |
+| `HAS_UI` | Does this project have a user-facing UI (web/mobile/desktop front-end)? | `yes`/`no`. Gates whether the `designer` agent is generated. |
 | `EXTRA_DENY` | Extra commands/paths agents must never touch? | Optional |
 
 ## Confirmation
@@ -48,6 +50,8 @@ Show a table of all answers (including `TBD`s) and get explicit approval before 
   "COMPLIANCE": "none",
   "TEAM": "solo",
   "PYTHON_CMD": "python",
+  "NPX_CMD": "npx",
+  "HAS_UI": "no",
   "EXTRA_DENY": []
 }
 ```

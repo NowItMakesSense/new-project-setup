@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxograma do Orquestrador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    /* light theme = "spec sheet" paper */
+    --bg: #eef1f6;
+    --surface: #ffffff;
+    --surface-2: #e4e9f1;
+    --grid: #d6deea;
+    --line: #c2ccdc;
+    --ink: #17233a;
+    --muted: #56647d;
+    --accent: #2954d4;
+    --accent-ink: #1c3a99;
+
+    --gate: #a6690a;
+    --gate-bg: #fbf0da;
+    --conditional: #6c4fc2;
+    --cond-bg: #efe9fb;
+    --pass: #1c7a4f;
+    --pass-bg: #e2f3ea;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --space-8: 64px;
+
+    --font-display: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+    --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      /* dark theme = true blueprint */
+      --bg: #0d2142;
+      --surface: #132c54;
+      --surface-2: #0f2648;
+      --grid: #24416f;
+      --line: #2e4d7d;
+      --ink: #eaf1ff;
+      --muted: #a4bbdf;
+      --accent: #7aabff;
+      --accent-ink: #bcd4ff;
+
+      --gate: #f2b73a;
+      --gate-bg: #2c2410;
+      --conditional: #c3aef5;
+      --cond-bg: #241a3c;
+      --pass: #4fdc9a;
+      --pass-bg: #103324;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0d2142;
+    --surface: #132c54;
+    --surface-2: #0f2648;
+    --grid: #24416f;
+    --line: #2e4d7d;
+    --ink: #eaf1ff;
+    --muted: #a4bbdf;
+    --accent: #7aabff;
+    --accent-ink: #bcd4ff;
+    --gate: #f2b73a;
+    --gate-bg: #2c2410;
+    --conditional: #c3aef5;
+    --cond-bg: #241a3c;
+    --pass: #4fdc9a;
+    --pass-bg: #103324;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    padding: var(--space-6) var(--space-4) var(--space-8);
+  }
+
+  .sheet {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  /* ---- title block, in the manner of an engineering drawing's title block ---- */
+  .titleblock {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: var(--space-5) var(--space-5);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-4) var(--space-6);
+    align-items: end;
+  }
+  .titleblock .eyebrow {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin: 0 0 var(--space-2);
+  }
+  .titleblock h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+    max-width: 46ch;
+  }
+  .titleblock .lede {
+    font-size: 14px;
+    color: var(--muted);
+    margin: var(--space-2) 0 0;
+    max-width: 58ch;
+  }
+  .meta {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: var(--space-1) var(--space-3);
+    font-family: var(--font-display);
+    font-size: 12px;
+    white-space: nowrap;
+    justify-self: end;
+  }
+  .meta dt { color: var(--muted); text-align: right; }
+  .meta dd { margin: 0; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  /* ---- diagram viewport, framed like a drawing sheet with registration marks ---- */
+  .viewport {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: var(--space-6) var(--space-4) var(--space-5);
+  }
+  .viewport::before, .viewport::after,
+  .corner-br::before, .corner-br::after {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--accent);
+    opacity: 0.55;
+  }
+  .viewport::before { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+  .viewport::after { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+  .corner-br { position: relative; }
+  .corner-br::before { bottom: 10px; left: 10px; top: auto; border-right: none; border-top: none; }
+  .corner-br::after { bottom: 10px; right: 10px; top: auto; border-left: none; border-top: none; }
+
+  .viewport-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 var(--space-4);
+  }
+  .diagram-scroll {
+    overflow-x: auto;
+    padding-block: var(--space-2);
+  }
+  #diagram-target { display: flex; justify-content: center; min-width: 760px; }
+  #diagram-target svg { max-width: none; }
+
+  /* ---- legend as keyed call-outs, referencing the diagram's own node codes ---- */
+  .legend {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: var(--space-5);
+  }
+  .legend h2 {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 var(--space-4);
+  }
+  .callouts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-4);
+  }
+  .callout {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding-block: var(--space-1);
+  }
+  .callout .code {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--surface);
+    background: var(--conditional);
+    border-radius: 3px;
+    padding: 2px 7px;
+    flex: none;
+    margin-top: 1px;
+  }
+  .callout.is-gate .code { background: var(--gate); }
+  .callout.is-pass .code { background: var(--pass); }
+  .callout p { margin: 0; font-size: 13.5px; color: var(--ink); }
+  .callout p em { color: var(--muted); font-style: normal; }
+
+  .crossref {
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px dashed var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .crossref code {
+    font-family: var(--font-display);
+    font-size: 12px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+
+  @media (max-width: 640px) {
+    .titleblock { grid-template-columns: 1fr; }
+    .meta { justify-self: start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+
+  <header class="titleblock">
+    <div>
+      <p class="eyebrow">new-project-setup &middot; referência de arquitetura</p>
+      <h1>Fluxo do orquestrador</h1>
+      <p class="lede">Todas as 8 fases, gates humanos e ramos condicionais de <code>/orchestrate</code>, extraídos linha a linha do SKILL.md gerado.</p>
+    </div>
+    <dl class="meta">
+      <dt>Fonte</dt><dd>orchestrate/SKILL.md</dd>
+      <dt>Fonte</dt><dd>workflow.md</dd>
+      <dt>Rev.</dt><dd>2026-10-20</dd>
+    </dl>
+  </header>
+
+  <section class="viewport corner-br">
+    <p class="viewport-label">Diagrama &middot; role lateralmente se necessário</p>
+    <div class="diagram-scroll">
+      <div id="diagram-target" aria-label="Fluxograma do orquestrador"></div>
+    </div>
+    <script type="text/plain" id="diagram-src">
+flowchart TD
+    A[/orchestrate invocado/] --> B["Start 1-2: lê CLAUDE.md, STATUS.md, discovery.md"]
+    B --> C{discovery.md ausente<br/>ou tem TBD/open questions?}
+    C -- sim --> D[Roda /plan-grill primeiro]
+    D --> E
+    C -- não --> E["Start 3: pergunta qual feature/fase trabalhar"]
+    E --> F["Start 4: pergunta model/effort<br/>orquestrador + cada subagente; grava em STATUS.md"]
+    F --> G{"Start 5: código já existe<br/>E não há knowledge graph?"}
+    G -- sim retrofit --> H["knowledge-graph analisa código/docs existentes<br/>e PROPÕE entidades/relações"]
+    H --> I[Usuário confirma antes de persistir]
+    I --> J1
+    G -- não --> J1
+
+    subgraph P1["Fase 1 · Discovery"]
+        J1["planner + /plan-grill → discovery.md"] --> J2["knowledge-graph semeia o grafo<br/>a partir de discovery.md + glossary.md"]
+    end
+    J2 --> GATE1{Usuário confirma resumo?}
+    GATE1 -- não --> J1
+    GATE1 -- sim --> K1
+
+    subgraph P2["Fase 2 · Requirements"]
+        K1["planner + spec-writer → requirements.md<br/>EARS + Gherkin + NFRs estruturadas"]
+    end
+    K1 --> GATE2{Usuário aprova requirements?}
+    GATE2 -- não --> K1
+    GATE2 -- sim --> L1
+
+    subgraph P3["Fase 3 · Architecture and Domain"]
+        L1["architect → design.md<br/>layers, ports, system design, threat model"]
+        L2["domain → bounded contexts,<br/>aggregates, glossary"]
+        L3{HAS_UI = yes?}
+        L3 -- sim --> L4["designer → IA, wireframes,<br/>design system, WCAG"]
+        L3 -- não --> L5[pula designer]
+        L4 --> L6["knowledge-graph estende o grafo<br/>a partir do design.md aprovado"]
+        L5 --> L6
+    end
+    L1 --> L3
+    L2 --> L3
+    L6 --> GATE3{Usuário aprova o design?}
+    GATE3 -- não --> L1
+    GATE3 -- sim --> M1
+
+    subgraph P4["Fase 4 · Tasks"]
+        M1["planner → tasks.md<br/>TDD-sized, REQ-IDs"]
+    end
+    M1 --> GATE4{Usuário aprova as tasks?}
+    GATE4 -- não --> M1
+    GATE4 -- sim --> N1
+
+    subgraph P5["Fase 5 · TDD loop por task"]
+        N1["test: escreve teste falhando<br/>RED · Iron Law"]
+        N1 --> N2["implementer: código mínimo<br/>para passar GREEN"]
+        N2 --> N3["implementer: refatora,<br/>testes continuam verdes"]
+        N3 --> N4{Falha inesperada?}
+        N4 -- sim --> N5["debugging-protocol.md:<br/>reproduzir → causa raiz → hipótese → fix + teste de regressão"]
+        N5 --> N2
+    end
+    N4 -- não --> GATE5{Testes verdes?<br/>mais tasks?}
+    GATE5 -- mais tasks --> N1
+    GATE5 -- todas prontas --> O1
+
+    subgraph P6["Fase 6 · Review and QA"]
+        O1["reviewer: Clean Code, SOLID,<br/>layering, alinhamento com spec"]
+        O2["qa: integração, e2e,<br/>edge-cases, regressão"]
+        O3["Achados → findings-ledger.md<br/>compartilhado (status: Open)"]
+    end
+    O1 --> O3
+    O2 --> O3
+    O3 --> GATE6{Open/Confirmed Critical/High?<br/>E suite do QA verde?}
+    GATE6 -- tem Open --> DISP1["implementer responde:<br/>corrige ou disputa"]
+    DISP1 --> DISP2["Quem levantou decide:<br/>Confirmed ou Retracted"]
+    DISP2 --> GATE6
+    GATE6 -- limpo e verde --> P1b
+
+    subgraph P7["Fase 7 · Security"]
+        P1b["security → security-report.md<br/>ASVS exaustivo + integridade do guard de DB<br/>achados também vão pro ledger"]
+    end
+    P1b --> GATE7{Sem Open/Confirmed<br/>Critical/High no ledger?}
+    GATE7 -- tem Open --> DISP3["implementer responde:<br/>corrige ou disputa (mesmo ledger)"]
+    DISP3 --> DISP4["Quem levantou decide:<br/>Confirmed ou Retracted"]
+    DISP4 --> GATE7
+    GATE7 -- limpo --> Q1
+
+    subgraph P8["Fase 8 · CI/CD and docs"]
+        Q1["devops-docs: pipeline + guard-rail CI,<br/>README, changelog — ajustado ao cenário"]
+    end
+    Q1 --> GATE8{Usuário confirma release?}
+    GATE8 -- não --> Q1
+    GATE8 -- sim --> RETRO["Retro: docs/specs/(feature)/retro.md<br/>o que ajustar, o que carrega pro próximo /plan-grill"]
+    RETRO --> R["Done: REQ-IDs rastreados a testes passando,<br/>gates fechados, docs atualizados"]
+
+    class GATE1,GATE2,GATE3,GATE4,GATE6,GATE7,GATE8 gate;
+    class C,G,L3,N4,GATE5,H,I,L4,L5,N5,DISP1,DISP2,DISP3,DISP4 variant;
+    class R done;
+    </script>
+  </section>
+
+  <section class="legend">
+    <h2>Legenda &middot; o que é novo desde a versão original de 8 agentes</h2>
+    <div class="callouts">
+      <div class="callout">
+        <span class="code">G·H·I</span>
+        <p>Retrofit: só dispara quando já existe código no projeto mas ainda não existe <em>knowledge graph</em>. O grafo é só proposto — nunca persistido sem confirmação.</p>
+      </div>
+      <div class="callout">
+        <span class="code">J2·L6</span>
+        <p><code class="inline">knowledge-graph</code> semeia na fase 1 e estende na fase 3, sempre checando o grafo existente antes de criar (idempotência).</p>
+      </div>
+      <div class="callout">
+        <span class="code">L3·L4·L5</span>
+        <p><code class="inline">designer</code> só é chamado quando <code class="inline">HAS_UI = yes</code> — em projeto sem UI, esse ramo é pulado.</p>
+      </div>
+      <div class="callout">
+        <span class="code">O1·O2</span>
+        <p><code class="inline">qa</code> roda em paralelo ao <code class="inline">reviewer</code> na fase 6 — cobertura de integração/e2e além dos testes unitários do TDD.</p>
+      </div>
+      <div class="callout">
+        <span class="code">O3 · DISP 1–4</span>
+        <p><code class="inline">reviewer</code>, <code class="inline">qa</code> e <code class="inline">security</code> (fase 7) logam no mesmo <code class="inline">findings-ledger.md</code> compartilhado - o fluxo de disputa se repete em cada fase (DISP1/2 na 6, DISP3/4 na 7) porque o gate é local, mas o ledger é um só. Um achado Critical/High nunca bloqueia de cara: <code class="inline">implementer</code> responde (corrige ou disputa), e só quem levantou decide <code class="inline">Confirmed</code>/<code class="inline">Retracted</code>.</p>
+      </div>
+      <div class="callout">
+        <span class="code">RETRO</span>
+        <p>Depois da fase 8 confirmada: <code class="inline">retro.md</code> curto com o usuário — o que ajustar carrega pro próximo <code class="inline">/plan-grill</code>, não fica arquivado.</p>
+      </div>
+      <div class="callout">
+        <span class="code">N4·N5</span>
+        <p>Protocolo de debugging: comportamento exigido pelo <code class="inline">implementer.md</code> quando um teste falha de forma inesperada — não é fase separada na tabela do SKILL.md.</p>
+      </div>
+      <div class="callout is-gate">
+        <span class="code">GATE 1–8</span>
+        <p>Cada gate numerado é aprovação humana explícita. <code class="inline">GATE5</code> (testes verdes/mais tasks) é controle automático, não aprovação — por isso está marcado como ramo condicional, não gate.</p>
+      </div>
+      <div class="callout is-pass">
+        <span class="code">R</span>
+        <p>Done: todos os REQ-IDs rastreados a testes passando, gates fechados, docs atualizadas.</p>
+      </div>
+    </div>
+    <p class="crossref">
+      Modelo por papel (não mostrado como nó): <code class="inline">architect</code>/<code class="inline">security</code>/<code class="inline">reviewer</code> = <code class="inline">opus</code>; resto do time = <code class="inline">sonnet</code>; <code class="inline">devops-docs</code> = <code class="inline">haiku</code> — todos ajustáveis no Start 4.
+    </p>
+    <p class="crossref">
+      Para verificar a implementação, compare este diagrama com <code>assets/templates/.claude/skills/orchestrate/SKILL.md</code> (seção &ldquo;Phases&rdquo;) e <code>references/workflow.md</code> — ambos devem concordar nas fases 1, 3, 6, 7 e no passo de retro após a fase 8.
+    </p>
+  </section>
+
+</div>
+
+<script>
+  // Mermaid's classDef/style grammar doesn't accept CSS var() - so colors for the
+  // semantic node classes (gate / variant / done) and phase subgraphs are resolved
+  // to literal values here, then appended to the diagram source before rendering.
+  function token(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function themeVariables() {
+    return {
+      background: token('--surface'),
+      primaryColor: token('--surface'),
+      primaryTextColor: token('--ink'),
+      primaryBorderColor: token('--line'),
+      lineColor: token('--muted'),
+      textColor: token('--ink'),
+      mainBkg: token('--surface'),
+      nodeBorder: token('--line'),
+      clusterBkg: token('--surface-2'),
+      clusterBorder: token('--line'),
+      edgeLabelBackground: token('--bg'),
+      fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+      fontSize: '13px',
+    };
+  }
+
+  function colorTrailer() {
+    const phases = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
+    const lines = [
+      `classDef default fill:${token('--surface')},stroke:${token('--line')},color:${token('--ink')};`,
+      `classDef gate fill:${token('--gate-bg')},stroke:${token('--gate')},color:${token('--ink')},stroke-width:1.6px;`,
+      `classDef variant fill:${token('--cond-bg')},stroke:${token('--conditional')},color:${token('--ink')},stroke-width:1.6px;`,
+      `classDef done fill:${token('--pass-bg')},stroke:${token('--pass')},color:${token('--ink')},stroke-width:1.6px;`,
+      ...phases.map(p => `style ${p} fill:${token('--surface-2')},stroke:${token('--line')},color:${token('--muted')}`),
+    ];
+    return '\n' + lines.join('\n') + '\n';
+  }
+
+  async function draw() {
+    // mermaid measures label text to size nodes - if the web font isn't loaded yet it
+    // measures against the fallback font and the real text then overflows/clips.
+    try {
+      await Promise.all([
+        document.fonts.load('600 16px "JetBrains Mono"'),
+        document.fonts.load('400 13px "JetBrains Mono"'),
+        document.fonts.ready,
+      ]);
+    } catch (e) { /* fonts API unavailable - proceed anyway */ }
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: themeVariables(),
+      flowchart: { htmlLabels: true, curve: 'basis' },
+    });
+    const src = document.getElementById('diagram-src').textContent + colorTrailer();
+    const { svg } = await mermaid.render('orchestrator-flow-svg', src);
+    document.getElementById('diagram-target').innerHTML = svg;
+  }
+
+  draw().catch((e) => {
+    document.getElementById('diagram-target').innerHTML =
+      '<pre style="color:#b4433a;white-space:pre-wrap;font-family:var(--font-display);font-size:12px">' +
+      String(e && e.message ? e.message : e) + '</pre>';
+  });
+
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener('change', () => draw().catch(() => {}));
+</script>
+</body>
+</html>

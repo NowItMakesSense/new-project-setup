@@ -16,7 +16,12 @@ from pathlib import Path
 REQUIRED = [
     "PROJECT_NAME", "PROJECT_DESCRIPTION", "DOC_LANGUAGE", "DOMAIN", "PROJECT_TYPE", "STACK",
     "TEST_CMD", "LINT_CMD", "BUILD_CMD", "DB_ENGINE", "TEST_DB_STRATEGY", "CI_PROVIDER",
-    "VCS_BRANCHING", "ENGINEERING_PRINCIPLES", "COMPLIANCE", "TEAM", "PYTHON_CMD", "EXTRA_DENY",
+    "VCS_BRANCHING", "ENGINEERING_PRINCIPLES", "COMPLIANCE", "TEAM", "PYTHON_CMD", "NPX_CMD",
+    "HAS_UI", "EXTRA_DENY",
+]
+KG_MCP_TOOLS = [
+    "read_graph", "search_nodes", "open_nodes", "create_entities", "create_relations",
+    "add_observations", "delete_entities", "delete_relations", "delete_observations",
 ]
 TEMPLATES = Path(__file__).resolve().parent.parent / "assets" / "templates"
 VAR = re.compile(r"\{\{([A-Z_]+)\}\}")
@@ -34,6 +39,28 @@ def load_answers(path: Path) -> dict:
     values = {k: str(data[k]) for k in REQUIRED if k != "EXTRA_DENY"}
     values["EXTRA_DENY_ITEMS"] = "".join(",\n      " + json.dumps(x) for x in data["EXTRA_DENY"])
     values["_CI"] = str(data["CI_PROVIDER"]).strip().lower()
+    values["_HAS_UI"] = str(data["HAS_UI"]).strip().lower()
+
+    npx_cmd = str(data["NPX_CMD"]).strip()
+    node_available = npx_cmd.lower() not in ("none", "tbd", "")
+    if node_available:
+        if not re.fullmatch(r"[A-Za-z0-9_./-]+", npx_cmd):
+            sys.exit("NPX_CMD must be a plain command name such as npx, or 'none'")
+        values["MCP_SERVERS_BLOCK"] = (
+            ",\n  \"mcpServers\": {\n"
+            "    \"knowledge-graph\": {\n"
+            f"      \"command\": {json.dumps(npx_cmd)},\n"
+            "      \"args\": [\"-y\", \"@modelcontextprotocol/server-memory\"],\n"
+            "      \"env\": {\n"
+            "        \"MEMORY_FILE_PATH\": \"$CLAUDE_PROJECT_DIR/docs/knowledge-graph/graph.jsonl\"\n"
+            "      }\n"
+            "    }\n"
+            "  }"
+        )
+        values["KG_MCP_TOOLS"] = "".join(f", mcp__knowledge-graph__{t}" for t in KG_MCP_TOOLS)
+    else:
+        values["MCP_SERVERS_BLOCK"] = ""
+        values["KG_MCP_TOOLS"] = ""
     return values
 
 
@@ -45,32 +72,83 @@ def render(text: str, values: dict, name: str) -> str:
     return VAR.sub(sub, text)
 
 
+def merge_settings(old: dict, new: dict) -> dict:
+    """Key-level merge of .claude/settings.json: union deny rules, add new hook/mcpServers
+    entries, never touch or remove anything already in `old` that `new` doesn't mention."""
+    merged = dict(old)
+
+    old_deny = old.get("permissions", {}).get("deny", [])
+    new_deny = new.get("permissions", {}).get("deny", [])
+    merged["permissions"] = dict(old.get("permissions", {}))
+    merged["permissions"]["deny"] = old_deny + [d for d in new_deny if d not in old_deny]
+
+    old_hooks = old.get("hooks", {}).get("PreToolUse", [])
+    new_hooks = new.get("hooks", {}).get("PreToolUse", [])
+
+    def hook_commands(entries):
+        return {h.get("command", "") for e in entries for h in e.get("hooks", [])}
+
+    existing_cmds = hook_commands(old_hooks)
+    merged_hooks = list(old_hooks)
+    for entry in new_hooks:
+        if not any(h.get("command", "") in existing_cmds for h in entry.get("hooks", [])):
+            merged_hooks.append(entry)
+    if old_hooks or new_hooks:
+        merged["hooks"] = dict(old.get("hooks", {}))
+        merged["hooks"]["PreToolUse"] = merged_hooks
+
+    old_mcp = old.get("mcpServers", {})
+    new_mcp = new.get("mcpServers", {})
+    if old_mcp or new_mcp:
+        merged_mcp = dict(old_mcp)
+        for key, value in new_mcp.items():
+            merged_mcp.setdefault(key, value)
+        merged["mcpServers"] = merged_mcp
+
+    return merged
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", required=True)
     ap.add_argument("--answers", required=True)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--merge-settings", action="store_true",
+                     help="For .claude/settings.json only: merge new deny rules/hooks/mcpServers "
+                          "into the existing file by key instead of skipping or fully overwriting it.")
     a = ap.parse_args()
 
     values = load_answers(Path(a.answers))
     target = Path(a.target).resolve()
-    created, skipped = [], []
+    created, skipped, merged_files = [], [], []
 
     for src in sorted(p for p in TEMPLATES.rglob("*") if p.is_file()):
         rel = src.relative_to(TEMPLATES)
         if rel.as_posix().startswith(".github/") and values["_CI"] != "github-actions":
             continue
+        if rel.as_posix() == ".claude/agents/designer.md" and values["_HAS_UI"] != "yes":
+            continue
         is_tmpl = src.suffix == ".tmpl"
         dest = target / (rel.with_suffix("") if is_tmpl else rel)
-        if dest.exists() and not a.overwrite:
-            skipped.append(dest)
-            continue
+        text = src.read_text(encoding="utf-8")
+        if is_tmpl:
+            text = render(text, values, rel.as_posix())
+
+        if dest.exists():
+            if a.merge_settings and rel.as_posix() == ".claude/settings.json.tmpl":
+                old = json.loads(dest.read_text(encoding="utf-8"))
+                new = json.loads(text)
+                merged = merge_settings(old, new)
+                if not a.dry_run:
+                    dest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8", newline="\n")
+                merged_files.append(dest)
+                continue
+            if not a.overwrite:
+                skipped.append(dest)
+                continue
         if not a.dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            text = src.read_text(encoding="utf-8")
-            if is_tmpl:
-                text = render(text, values, rel.as_posix())
             dest.write_text(text, encoding="utf-8", newline="\n")
         created.append(dest)
 
@@ -78,8 +156,13 @@ def main() -> None:
     print(f"{verb} {len(created)} file(s):")
     for p in created:
         print(f"  + {p.relative_to(target)}")
+    if merged_files:
+        verb2 = "Would merge" if a.dry_run else "Merged"
+        print(f"{verb2} {len(merged_files)} file(s) by key (deny rules/hooks/mcpServers union):")
+        for p in merged_files:
+            print(f"  ~ {p.relative_to(target)}")
     if skipped:
-        print(f"Skipped {len(skipped)} existing file(s) (use --overwrite only with user approval):")
+        print(f"Skipped {len(skipped)} existing file(s) (use --overwrite or --merge-settings only with user approval):")
         for p in skipped:
             print(f"  = {p.relative_to(target)}")
 

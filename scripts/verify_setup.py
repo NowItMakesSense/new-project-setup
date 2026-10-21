@@ -11,8 +11,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-AGENTS = ["planner", "architect", "domain", "test", "implementer", "reviewer", "security", "devops-docs"]
-SKILLS = ["orchestrate", "plan-grill", "spec-writer"]
+AGENTS = ["planner", "architect", "domain", "test", "qa", "implementer", "reviewer", "security",
+          "devops-docs", "knowledge-graph"]
+OPTIONAL_AGENTS = ["designer"]
+MODEL_TIER = {
+    "architect": "opus", "security": "opus", "reviewer": "opus",
+    "devops-docs": "haiku",
+    "planner": "sonnet", "domain": "sonnet", "test": "sonnet", "implementer": "sonnet",
+    "qa": "sonnet", "knowledge-graph": "sonnet", "designer": "sonnet",
+}
+SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
              "Bash(docker exec:*)", "Read(./.env)", "Read(./.env.*)"]
 BLOCKED = [
@@ -58,9 +66,14 @@ def frontmatter(path: Path) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", required=True)
-    t = Path(ap.parse_args().target).resolve()
+    ap.add_argument("--answers")
+    args = ap.parse_args()
+    t = Path(args.target).resolve()
+    answers = json.loads(Path(args.answers).read_text(encoding="utf-8")) if args.answers else None
 
-    for f in ["CLAUDE.md", "AGENTS.md", "docs/glossary.md", "docs/specs/README.md", "docs/adr/0000-template.md"]:
+    for f in ["CLAUDE.md", "AGENTS.md", "docs/glossary.md", "docs/specs/README.md",
+              "docs/adr/0000-template.md", "docs/knowledge-graph/README.md",
+              "docs/test-strategy.md", "docs/debugging-protocol.md"]:
         check((t / f).is_file(), f"exists: {f}")
 
     sp = t / ".claude" / "settings.json"
@@ -74,6 +87,21 @@ def main() -> None:
             hooks = s.get("hooks", {}).get("PreToolUse", [])
             check(any("block-db-access.py" in h.get("command", "") for e in hooks for h in e.get("hooks", [])),
                   "PreToolUse hook registered")
+
+            mcp = s.get("mcpServers", {})
+            node_expected = answers is not None and str(answers.get("NPX_CMD", "")).strip().lower() not in ("none", "tbd", "")
+            if node_expected:
+                check("knowledge-graph" in mcp, "mcpServers.knowledge-graph declared (NPX_CMD set)")
+            if "knowledge-graph" in mcp:
+                kg = mcp["knowledge-graph"]
+                well_formed = (
+                    bool(kg.get("command"))
+                    and kg.get("args") == ["-y", "@modelcontextprotocol/server-memory"]
+                    and kg.get("env", {}).get("MEMORY_FILE_PATH", "").endswith("docs/knowledge-graph/graph.jsonl")
+                )
+                check(well_formed, "mcpServers.knowledge-graph well-formed")
+            elif answers is None:
+                print("INFO  mcpServers.knowledge-graph not present (pass --answers to verify this was expected)")
         except json.JSONDecodeError as e:
             check(False, f"settings.json is valid JSON ({e})")
 
@@ -88,6 +116,12 @@ def main() -> None:
         check(subprocess.run([py, str(hook)], input="not json", capture_output=True, text=True).returncode == 2,
               "hook fails closed on malformed input")
 
+    guard = t / ".claude" / "hooks" / "verify-guard.py"
+    check(guard.is_file(), "exists: verify-guard.py (CI guard-rail check)")
+    if guard.is_file():
+        r = subprocess.run([sys.executable, str(guard)], cwd=t, capture_output=True, text=True)
+        check(r.returncode == 0, "verify-guard.py passes against this scaffold (self-check)")
+
     for a in AGENTS:
         p = t / ".claude" / "agents" / f"{a}.md"
         check(p.is_file(), f"agent exists: {a}")
@@ -95,6 +129,18 @@ def main() -> None:
             fm = frontmatter(p)
             check(fm.get("name", "").strip() == a and bool(fm.get("description", "").strip()),
                   f"agent frontmatter valid: {a}")
+            check(fm.get("model", "").strip() == MODEL_TIER[a], f"agent model tier: {a} = {MODEL_TIER[a]}")
+            body = p.read_text(encoding="utf-8")
+            check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
+    for a in OPTIONAL_AGENTS:
+        p = t / ".claude" / "agents" / f"{a}.md"
+        if answers is not None and str(answers.get("HAS_UI", "")).strip().lower() == "yes" and a == "designer":
+            check(p.is_file(), f"agent exists: {a} (HAS_UI=yes)")
+        if p.is_file():
+            fm = frontmatter(p)
+            check(fm.get("name", "").strip() == a and bool(fm.get("description", "").strip()),
+                  f"agent frontmatter valid: {a}")
+            check(fm.get("model", "").strip() == MODEL_TIER[a], f"agent model tier: {a} = {MODEL_TIER[a]}")
             body = p.read_text(encoding="utf-8")
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
     for sk in SKILLS:

@@ -8,6 +8,7 @@ No agent or orchestrator may, by any means, query, inspect, connect to, migrate,
 2. **PreToolUse hook** (`.claude/hooks/block-db-access.py`): inspects Bash commands and file paths with broader patterns (connection-string URLs such as `postgres://`, wrapper invocations like `npx prisma`, `bash -c "psql ..."`, `cat .env`). Exit code 2 blocks the call.
 3. **Textual rules** in `CLAUDE.md`, `AGENTS.md` and every agent prompt.
 4. **Structural**: no agent is given credentials; tests use in-memory/fakes or disposable containers started by a human; migrations are only **generated as files** for a human to review and apply.
+5. **Continuous verification**: `.claude/hooks/verify-guard.py` re-runs the deny-rule and hook-blocking checks in CI on every push/PR (wired into `ci.yml` when GitHub Actions was picked). Catches drift - someone weakening the deny list or disabling the hook - instead of relying on nobody ever touching it.
 
 ### If a task seems to require DB access
 Stop and tell the user. Propose a human-run command or a fixture/fake instead. Never work around the guard (no scripts, no base64, no alternate clients).
@@ -20,6 +21,10 @@ Stop and tell the user. Propose a human-run command or a fixture/fake instead. N
 - Dependency audit + SAST in CI; pin versions; review new dependencies.
 - Destructive or outward-facing actions (deleting data, pushing, deploying, publishing, sending messages) require explicit human confirmation.
 - Log without PII/secrets; document data retention per `COMPLIANCE` answer.
+
+## Knowledge-graph MCP server (out of scope for the DB guard, by design)
+If configured (`NPX_CMD` wasn't `none` at setup), `.claude/settings.json` declares an `mcpServers.knowledge-graph` entry running `@modelcontextprotocol/server-memory`, used only by the `knowledge-graph` agent to persist the project's domain model (entities, value objects, aggregates, bounded contexts, relationships) to `docs/knowledge-graph/graph.jsonl`. This is local project-domain metadata: no credentials, no production data, no connection to the system database.
+The PreToolUse guard hook's matcher (`Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob`) does not cover MCP tool calls (named `mcp__<server>__<tool>`), so `mcp__knowledge-graph__*` calls are not intercepted by it - this is intentional, not a gap. Do not add a new MCP server that could reach the database or credentials without first extending the guard's matcher and threat model.
 
 ## Limits
 Hook and deny rules are enforced only by Claude Code. `AGENTS.md` is advisory for other tools. Tell the user this.
