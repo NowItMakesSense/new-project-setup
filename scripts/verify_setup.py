@@ -11,23 +11,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from scaffold import TIER_PRESETS  # noqa: E402
+
 AGENTS = ["planner", "architect", "domain", "test", "qa", "implementer", "reviewer", "security",
-          "devops-docs", "knowledge-graph"]
+          "devops-docs", "knowledge-graph", "debug"]
 OPTIONAL_AGENTS = ["designer"]
-MODEL_TIER = {
-    "architect": "opus", "security": "opus", "reviewer": "opus",
-    "devops-docs": "haiku",
-    "planner": "sonnet", "domain": "sonnet", "test": "sonnet", "implementer": "sonnet",
-    "qa": "sonnet", "knowledge-graph": "sonnet", "designer": "sonnet",
-}
 SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
-             "Bash(docker exec:*)", "Read(./.env)", "Read(./.env.*)"]
+             "Bash(docker exec:*)", "Bash(aws secretsmanager get-secret-value:*)",
+             "Read(./.env)", "Read(./.env.*)"]
 BLOCKED = [
     ("Bash", {"command": "psql -h localhost -U app db"}),
     ("Bash", {"command": "bash -c \"mysql -e 'select 1'\""}),
     ("Bash", {"command": "npx prisma migrate deploy"}),
     ("Bash", {"command": "docker exec db sqlite3 x.db"}),
+    ("Bash", {"command": "aws secretsmanager get-secret-value --secret-id prod/db"}),
+    ("Bash", {"command": "vault read secret/prod/db"}),
     ("Bash", {"command": "cat .env"}),
     ("Bash", {"command": "echo postgres://u:p@h/db"}),
     ("Bash", {"command": "printenv"}),
@@ -70,6 +70,12 @@ def main() -> None:
     args = ap.parse_args()
     t = Path(args.target).resolve()
     answers = json.loads(Path(args.answers).read_text(encoding="utf-8")) if args.answers else None
+    priority = str(answers.get("MODEL_PRIORITY", "balanced")).strip().lower() if answers else "balanced"
+    if priority not in TIER_PRESETS:
+        priority = "balanced"
+    if answers is None:
+        print(f"INFO  no --answers given; checking model tiers against the '{priority}' preset as a guess")
+    model_tier = {role.lower().replace("_", "-"): model for role, model in TIER_PRESETS[priority].items()}
 
     for f in ["CLAUDE.md", "AGENTS.md", "docs/glossary.md", "docs/specs/README.md",
               "docs/adr/0000-template.md", "docs/knowledge-graph/README.md",
@@ -129,7 +135,7 @@ def main() -> None:
             fm = frontmatter(p)
             check(fm.get("name", "").strip() == a and bool(fm.get("description", "").strip()),
                   f"agent frontmatter valid: {a}")
-            check(fm.get("model", "").strip() == MODEL_TIER[a], f"agent model tier: {a} = {MODEL_TIER[a]}")
+            check(fm.get("model", "").strip() == model_tier[a], f"agent model tier: {a} = {model_tier[a]}")
             body = p.read_text(encoding="utf-8")
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
     for a in OPTIONAL_AGENTS:
@@ -140,7 +146,7 @@ def main() -> None:
             fm = frontmatter(p)
             check(fm.get("name", "").strip() == a and bool(fm.get("description", "").strip()),
                   f"agent frontmatter valid: {a}")
-            check(fm.get("model", "").strip() == MODEL_TIER[a], f"agent model tier: {a} = {MODEL_TIER[a]}")
+            check(fm.get("model", "").strip() == model_tier[a], f"agent model tier: {a} = {model_tier[a]}")
             body = p.read_text(encoding="utf-8")
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
     for sk in SKILLS:

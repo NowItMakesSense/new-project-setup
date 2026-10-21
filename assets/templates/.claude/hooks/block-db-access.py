@@ -18,6 +18,12 @@ MIGRATORS = (
     r"artisan\s+(?:migrate|db:)|ef\s+database|dotnet\s+ef\s+database"
 )
 CONTAINER_EXEC = r"(?:docker|podman|kubectl|nerdctl)(?:\s+compose)?\s+(?:exec|run|attach)|docker-compose\s+exec"
+SECRET_MANAGER_CLI = (
+    r"aws\s+secretsmanager\s+get-secret-value|aws\s+ssm\s+get-parameter(?:s(?:-by-path)?)?\b[^|;&]*--with-decryption|"
+    r"gcloud\s+secrets\s+versions\s+access|az\s+keyvault\s+secret\s+(?:show|download)|"
+    r"vault\s+(?:read|kv\s+get)|op\s+(?:read|item\s+get)|doppler\s+(?:secrets\s+get|run)|"
+    r"pass\s+show|kubectl\s+get\s+secrets?\b"
+)
 CONN_URL = r"(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|mssql|sqlserver|oracle|cassandra|clickhouse)://"
 SECRET_READ = r"(?:cat|type|less|more|head|tail|bat|get-content|gc|grep|rg|awk|sed|cp|mv|curl)\b[^|;&]*"
 SECRET_PATH = r"(?:^|[\\/\s\"'])\.env(?:\.[\w.-]+)?(?:$|[\s\"'])|secrets?[\\/]|\.pem\b|\.key\b|id_rsa|id_ed25519|credentials(?:\.json)?\b|\.pgpass|\.my\.cnf|\.netrc|\.aws[\\/]"
@@ -27,6 +33,7 @@ CMD_PATTERNS = [
     (re.compile(rf"(?:^|[\s;&|`(\"'/\\])(?:{DB_CLIS})(?:\.exe)?(?=$|[\s;&|`)\"'])", re.I), "database CLI"),
     (re.compile(rf"(?:^|[\s;&|`(\"'/\\])(?:{MIGRATORS})", re.I), "database migration/ORM runner"),
     (re.compile(CONTAINER_EXEC, re.I), "container exec (can reach the database)"),
+    (re.compile(SECRET_MANAGER_CLI, re.I), "cloud secret-manager CLI call"),
     (re.compile(CONN_URL, re.I), "database connection string"),
     (re.compile(SECRET_READ + SECRET_PATH, re.I), "secret/credential file access"),
     (re.compile(ENV_DUMP, re.I), "environment dump (may expose credentials)"),

@@ -24,7 +24,8 @@ def base_answers(**overrides) -> dict:
         "LINT_CMD": "ruff", "BUILD_CMD": "none", "DB_ENGINE": "postgresql",
         "TEST_DB_STRATEGY": "in-memory fakes", "CI_PROVIDER": "none", "VCS_BRANCHING": "trunk-based",
         "ENGINEERING_PRINCIPLES": "defaults", "COMPLIANCE": "none", "TEAM": "solo",
-        "PYTHON_CMD": "python", "NPX_CMD": "none", "HAS_UI": "no", "EXTRA_DENY": [],
+        "PYTHON_CMD": "python", "NPX_CMD": "none", "HAS_UI": "no",
+        "MODEL_PRIORITY": "balanced", "COVERAGE_THRESHOLD": "80", "EXTRA_DENY": [],
     }
     answers.update(overrides)
     return answers
@@ -73,13 +74,45 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         agents_dir = self.target / ".claude" / "agents"
         for name, tier in [("architect", "opus"), ("security", "opus"), ("reviewer", "opus"),
-                            ("devops-docs", "haiku"), ("implementer", "sonnet")]:
+                            ("debug", "opus"), ("devops-docs", "haiku"), ("implementer", "sonnet"),
+                            ("knowledge-graph", "sonnet")]:
             body = (agents_dir / f"{name}.md").read_text(encoding="utf-8")
             model_line = next(line for line in body.splitlines() if line.startswith("model:"))
             self.assertEqual(model_line.strip(), f"model: {tier}", name)
         self.assertTrue((self.target / ".claude" / "skills" / "amend-constitution" / "SKILL.md").is_file())
         self.assertTrue((self.target / "docs" / "specs" / "_templates" / "findings-ledger.md").is_file())
         self.assertTrue((self.target / "docs" / "specs" / "_templates" / "retro.md").is_file())
+        self.assertTrue((self.target / "docs" / "specs" / "_templates" / "feature-status.md").is_file())
+
+    def test_model_priority_cost_has_no_opus(self):
+        r = run_scaffold(self.target, base_answers(MODEL_PRIORITY="cost"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        agents_dir = self.target / ".claude" / "agents"
+        for p in agents_dir.glob("*.md"):
+            body = p.read_text(encoding="utf-8")
+            model_line = next(line for line in body.splitlines() if line.startswith("model:"))
+            self.assertNotEqual(model_line.strip(), "model: opus", p.name)
+
+    def test_model_priority_quality_upgrades_domain_and_knowledge_graph(self):
+        r = run_scaffold(self.target, base_answers(MODEL_PRIORITY="quality"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for name in ("domain", "knowledge-graph"):
+            body = (self.target / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+            model_line = next(line for line in body.splitlines() if line.startswith("model:"))
+            self.assertEqual(model_line.strip(), "model: opus", name)
+
+    def test_invalid_model_priority_fails(self):
+        r = run_scaffold(self.target, base_answers(MODEL_PRIORITY="fastest"))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("MODEL_PRIORITY", r.stdout + r.stderr)
+
+    def test_coverage_threshold_wired_into_claude_md_and_ci(self):
+        r = run_scaffold(self.target, base_answers(COVERAGE_THRESHOLD="90", CI_PROVIDER="github-actions"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        claude_md = (self.target / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("90", claude_md)
+        ci = (self.target / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("90", ci)
 
     def test_has_ui_yes_generates_designer(self):
         r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
@@ -171,6 +204,22 @@ class ScaffoldTests(unittest.TestCase):
         v = run_verify(self.target)
         self.assertNotEqual(v.returncode, 0)
         self.assertIn("FAIL", v.stdout)
+
+    def test_hook_blocks_cloud_secret_manager_cli(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        hook = self.target / ".claude" / "hooks" / "block-db-access.py"
+        cases = [
+            "aws secretsmanager get-secret-value --secret-id prod/db",
+            "vault read secret/prod/db",
+            "gcloud secrets versions access latest --secret=prod-db",
+            "az keyvault secret show --name db-pass",
+            "doppler secrets get DB_PASSWORD",
+        ]
+        for cmd in cases:
+            p = subprocess.run([PY, str(hook)], input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
+                                capture_output=True, text=True)
+            self.assertEqual(p.returncode, 2, f"should block: {cmd}\n{p.stderr}")
 
     def test_dry_run_creates_nothing(self):
         r = run_scaffold(self.target, base_answers(), "--dry-run")

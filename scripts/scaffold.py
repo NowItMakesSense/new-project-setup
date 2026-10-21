@@ -17,12 +17,30 @@ REQUIRED = [
     "PROJECT_NAME", "PROJECT_DESCRIPTION", "DOC_LANGUAGE", "DOMAIN", "PROJECT_TYPE", "STACK",
     "TEST_CMD", "LINT_CMD", "BUILD_CMD", "DB_ENGINE", "TEST_DB_STRATEGY", "CI_PROVIDER",
     "VCS_BRANCHING", "ENGINEERING_PRINCIPLES", "COMPLIANCE", "TEAM", "PYTHON_CMD", "NPX_CMD",
-    "HAS_UI", "EXTRA_DENY",
+    "HAS_UI", "MODEL_PRIORITY", "COVERAGE_THRESHOLD", "EXTRA_DENY",
 ]
 KG_MCP_TOOLS = [
     "read_graph", "search_nodes", "open_nodes", "create_entities", "create_relations",
     "add_observations", "delete_entities", "delete_relations", "delete_observations",
 ]
+# Role-tiered model defaults per MODEL_PRIORITY. "balanced" is the recommended default.
+TIER_PRESETS = {
+    "cost": {
+        "PLANNER": "sonnet", "ARCHITECT": "sonnet", "DOMAIN": "sonnet", "TEST": "sonnet",
+        "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "sonnet", "SECURITY": "sonnet",
+        "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "sonnet",
+    },
+    "balanced": {
+        "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "sonnet", "TEST": "sonnet",
+        "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
+        "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "opus",
+    },
+    "quality": {
+        "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "opus", "TEST": "sonnet",
+        "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
+        "DEVOPS_DOCS": "sonnet", "KNOWLEDGE_GRAPH": "opus", "DESIGNER": "sonnet", "DEBUG": "opus",
+    },
+}
 TEMPLATES = Path(__file__).resolve().parent.parent / "assets" / "templates"
 VAR = re.compile(r"\{\{([A-Z_]+)\}\}")
 
@@ -40,6 +58,12 @@ def load_answers(path: Path) -> dict:
     values["EXTRA_DENY_ITEMS"] = "".join(",\n      " + json.dumps(x) for x in data["EXTRA_DENY"])
     values["_CI"] = str(data["CI_PROVIDER"]).strip().lower()
     values["_HAS_UI"] = str(data["HAS_UI"]).strip().lower()
+
+    priority = str(data["MODEL_PRIORITY"]).strip().lower()
+    if priority not in TIER_PRESETS:
+        sys.exit(f"MODEL_PRIORITY must be one of {sorted(TIER_PRESETS)}, got {priority!r}")
+    for role, model in TIER_PRESETS[priority].items():
+        values[f"MODEL_{role}"] = model
 
     npx_cmd = str(data["NPX_CMD"]).strip()
     node_available = npx_cmd.lower() not in ("none", "tbd", "")
@@ -127,7 +151,7 @@ def main() -> None:
         rel = src.relative_to(TEMPLATES)
         if rel.as_posix().startswith(".github/") and values["_CI"] != "github-actions":
             continue
-        if rel.as_posix() == ".claude/agents/designer.md" and values["_HAS_UI"] != "yes":
+        if rel.as_posix() == ".claude/agents/designer.md.tmpl" and values["_HAS_UI"] != "yes":
             continue
         is_tmpl = src.suffix == ".tmpl"
         dest = target / (rel.with_suffix("") if is_tmpl else rel)

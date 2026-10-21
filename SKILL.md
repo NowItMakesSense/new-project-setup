@@ -51,7 +51,7 @@ Tell the user how to continue: run `/plan-grill` in the new project (planning in
 | `.claude/settings.json` | `permissions.deny` for DB/secrets + PreToolUse hook |
 | `.claude/hooks/block-db-access.py` | Hard block of DB CLIs, DB URLs, secrets |
 | `.claude/hooks/verify-guard.py` | CI guard-rail check: re-runs the deny-rule/hook checks on every push/PR, wired into `ci.yml` |
-| `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, and designer (only when `HAS_UI` is yes); each has a role-tiered default model (opus/sonnet/haiku), overridable per project |
+| `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and designer (only when `HAS_UI` is yes); each has a role-tiered default model (opus/sonnet/haiku) set by `MODEL_PRIORITY`, overridable per project |
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
 | `.claude/skills/spec-writer` | Writes requirements/design/tasks specs per feature |
@@ -62,6 +62,7 @@ Tell the user how to continue: run `/plan-grill` in the new project (planning in
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, with a one-time dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, feeding the next `/plan-grill` |
-| `.github/workflows/ci.yml` | Only when the user picked GitHub Actions |
+| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` | Per-feature status + a top-level index, so parallel work on different features doesn't collide |
+| `.github/workflows/ci.yml` | Only when the user picked GitHub Actions; includes a coverage-threshold placeholder step |
 
 References: `references/workflow.md`, `security-policy.md`, `engineering-principles.md`, `spec-format.md`, `test-strategy.md`, `debugging-protocol.md`.

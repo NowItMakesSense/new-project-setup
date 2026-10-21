@@ -11,10 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
-             "Bash(docker exec:*)", "Read(./.env)", "Read(./.env.*)"]
+             "Bash(docker exec:*)", "Bash(aws secretsmanager get-secret-value:*)",
+             "Read(./.env)", "Read(./.env.*)"]
 BLOCKED = [
     ("Bash", {"command": "psql -h localhost -U app db"}),
     ("Bash", {"command": "docker exec db sqlite3 x.db"}),
+    ("Bash", {"command": "aws secretsmanager get-secret-value --secret-id prod/db"}),
     ("Bash", {"command": "cat .env"}),
     ("Bash", {"command": "echo postgres://u:p@h/db"}),
     ("Read", {"file_path": str(ROOT / ".env.production")}),

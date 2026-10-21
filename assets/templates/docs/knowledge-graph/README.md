@@ -22,3 +22,6 @@ This README and `docs/glossary.md` are the human-readable views. For the full gr
 
 ## Fallback (no Node.js/npx)
 Without Node, the graph cannot be MCP-backed. In that case `knowledge-graph` maintains `docs/knowledge-graph/graph.md` (plain markdown tables) instead, and `docs/glossary.md` stays the primary human-readable artifact. Install Node.js and re-run the scaffold with `--overwrite` on `.claude/settings.json` to upgrade later.
+
+## Compatibility note
+This setup depends on two Claude Code internals that can change between versions: the `mcp__knowledge-graph__<tool>` naming convention used in `.claude/agents/knowledge-graph.md`'s `tools:` allowlist, and `$CLAUDE_PROJECT_DIR` expanding inside `mcpServers.*.env` in `.claude/settings.json`. If `knowledge-graph` ever reports a tool it should have access to as unavailable, or the memory server can't find `MEMORY_FILE_PATH`, that's the likely cause - check both against your installed Claude Code version's current docs rather than assuming the graph itself is broken.

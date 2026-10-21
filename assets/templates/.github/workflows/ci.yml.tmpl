@@ -22,6 +22,8 @@ jobs:
         run: echo "Run: {{LINT_CMD}}"        # replace once LINT_CMD is decided
       - name: Test
         run: echo "Run: {{TEST_CMD}}"        # replace once TEST_CMD is decided; tests must not use the system DB
+      - name: Coverage threshold ({{COVERAGE_THRESHOLD}}%)
+        run: echo "Wire this to the stack's coverage tool (pytest-cov/nyc/jacoco/go test -cover) and fail under {{COVERAGE_THRESHOLD}}%"   # devops-docs replaces this once the stack's test tool is set up
       - name: Build
         run: echo "Run: {{BUILD_CMD}}"       # replace once BUILD_CMD is decided
       - name: Secret scan

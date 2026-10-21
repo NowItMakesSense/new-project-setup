@@ -23,8 +23,8 @@ Discovery -> Specs -> Architecture/Domain -> Tasks -> TDD loop -> Review -> Secu
 Each phase ends with a human approval gate. Details: `.claude/skills/orchestrate/SKILL.md`.
 
 ## Agents (`.claude/agents/`)
-planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, and designer (only when this project has a UI). The orchestrator delegates; it does not write production code.
-Each agent file's `model:` frontmatter has a role-tiered default (`opus`: architect/security/reviewer - `sonnet`: planner/domain/test/implementer/qa/knowledge-graph/designer - `haiku`: devops-docs); `/orchestrate` asks once whether to keep those or override, and records the choice in `docs/specs/STATUS.md`.
+planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and designer (only when this project has a UI). The orchestrator delegates; it does not write production code. `debug` is only called in when one pass of `docs/debugging-protocol.md` by `implementer`/`qa` doesn't resolve a failure - it doesn't run by default.
+Each agent file's `model:` frontmatter has a role-tiered default set at scaffold time by the `MODEL_PRIORITY` answer (`{{MODEL_PRIORITY}}` for this project: architect/security/reviewer/debug get the strongest tier, devops-docs the cheapest); `/orchestrate` asks once whether to keep those or override, and records the choice in `docs/specs/STATUS.md`.
 `knowledge-graph` persists the domain model (entities, value objects, aggregates, bounded contexts, relationships) in `docs/knowledge-graph/`, MCP-backed when Node.js/`npx` was available at setup (see `.claude/settings.json`).
 Review/QA/security findings share one running `findings-ledger.md` per feature (phases 6-7) - a Critical/High finding is disputable once before it blocks a gate (see `docs/specs/_templates/findings-ledger.md`).
 
@@ -32,6 +32,7 @@ Review/QA/security findings share one running `findings-ledger.md` per feature (
 - Test: `{{TEST_CMD}}`
 - Lint/format: `{{LINT_CMD}}`
 - Build: `{{BUILD_CMD}}`
+- Coverage threshold: `{{COVERAGE_THRESHOLD}}` - enforced in CI by `devops-docs`, reported by `qa` before the phase 6 gate.
 (Any `TBD` must be filled once the stack is decided.)
 
 ## Specs

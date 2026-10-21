@@ -7,11 +7,15 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 ## Why you'd want this
 
 - **You stop re-writing boilerplate.** One skill call replaces an hour of copy-pasting `CLAUDE.md`/`AGENTS.md`, agent prompts and CI scaffolding between projects.
-- **Agents can't touch your database — structurally, not by promise.** Four independent layers (deny rules, a PreToolUse hook, textual rules in every prompt, and no agent ever holding credentials) block `psql`, `prisma migrate`, `docker exec`, reading `.env`, and every workaround a model might try. It fails closed on malformed input.
+- **Agents can't touch your database or your cloud secrets — structurally, not by promise.** Five independent layers (deny rules, a PreToolUse hook, textual rules in every prompt, no agent ever holding credentials, and continuous CI verification) block `psql`, `prisma migrate`, `docker exec`, reading `.env`, `aws secretsmanager get-secret-value`, `vault read`, `gcloud secrets versions access`, and every workaround a model might try. It fails closed on malformed input.
 - **No code before a spec exists.** Every feature goes through a planning interview, then EARS/Gherkin requirements, a design doc with a threat model, and TDD-sized tasks — all gated by your explicit approval, not the model's judgment call.
 - **It never guesses.** Missing stack, unclear scope, an ambiguous "fast" or "secure" — the skill (and everything it generates) stops and asks instead of inventing an answer.
 - **Works beyond Claude Code too.** A stack-agnostic `AGENTS.md` ships alongside the Claude-specific `.claude/` setup, so the same rules travel with you to other AI coding tools (enforcement there is advisory, not hooked).
-- **Sensible cost/quality defaults out of the box, still yours to override.** Every agent ships with a role-tiered default (`opus` for architect/security/reviewer, `sonnet` for the rest of the delivery team, `haiku` for devops-docs) instead of one blanket setting - `/orchestrate` asks once whether to keep or override them.
+- **Sensible cost/quality defaults out of the box, still yours to override.** The `MODEL_PRIORITY` interview answer (`cost`/`balanced`/`quality`) sets a role-tiered default per agent at scaffold time instead of one blanket setting, and `/orchestrate` asks once whether to keep or override it per project.
+- **A dedicated specialist for the bugs that resist the first fix.** When one pass of the debugging protocol by `implementer`/`qa` doesn't find the root cause, `debug` (a fresh agent, no prior guesses to anchor on) takes over instead of the same agent repeating the same approach.
+- **A real coverage number, not a vibe.** `COVERAGE_THRESHOLD` is an actual interview answer wired into the generated CI pipeline and into what `qa` has to report before the review gate - not a sentence buried in prose nobody enforces.
+- **Low-risk phases can move fast; the risky ones never do.** Opt into "autonomous mode" and phases 1-4 (discovery through tasks) stop asking for re-confirmation at every single gate - but review, security and release (phases 6-8) are always human-gated, no setting changes that.
+- **A checklist for when a released feature turns out wrong.** Revert isn't improvised: git-revert the code, mark the feature's status, record an ADR, and have `knowledge-graph` propose (never auto-apply) removing what only that feature added.
 - **A real test and QA story, not just a string.** A `references`/`docs` test-strategy guide spells out the pyramid and fixture conventions; a dedicated `qa` agent covers integration/e2e/edge-case/regression testing beyond the TDD unit tests `test` writes.
 - **Debugging has a protocol, not vibes.** A 4-phase systematic-debugging guide (reproduce → root cause → minimal hypothesis → fix + regression test) stops agents from patching symptoms they don't understand.
 - **The domain model is a real graph, not just a table.** A `knowledge-graph` agent persists entities/value objects/aggregates/bounded contexts and their relationships to an MCP-backed graph, seeded from discovery/design and extendable from an existing codebase on retrofit.
@@ -24,10 +28,10 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 | Path | Purpose |
 |---|---|
 | `CLAUDE.md`, `AGENTS.md` | Project rules, security policy, workflow summary — one Claude-specific, one universal |
-| `.claude/settings.json` | `permissions.deny` blocking DB CLIs, migration runners, `docker exec`, secrets |
+| `.claude/settings.json` | `permissions.deny` blocking DB CLIs, migration runners, `docker exec`, cloud secret-manager CLIs (AWS/GCP/Azure/Vault/1Password/Doppler), secrets |
 | `.claude/hooks/block-db-access.py` | Runtime hook: catches connection strings, wrapper calls, and workarounds the deny list misses |
 | `.claude/hooks/verify-guard.py` | CI guard-rail: re-runs the deny-rule/hook checks on every push/PR so drift gets caught |
-| `.claude/agents/*.md` | `planner`, `architect`, `domain`, `test`, `qa`, `implementer`, `reviewer`, `security`, `devops-docs`, `knowledge-graph`, and `designer` (only when the project has a UI) |
+| `.claude/agents/*.md` | `planner`, `architect`, `domain`, `test`, `qa`, `implementer`, `reviewer`, `security`, `devops-docs`, `knowledge-graph`, `debug`, and `designer` (only when the project has a UI) |
 | `.claude/skills/orchestrate` | The orchestrator: an 8-phase workflow with a human approval gate after every phase |
 | `.claude/skills/plan-grill` | A grill-me-style planning interview — one question at a time, walks every branch until nothing is ambiguous |
 | `.claude/skills/spec-writer` | Writes `requirements.md` (EARS + Gherkin), `design.md`, `tasks.md` per feature |
@@ -38,6 +42,7 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, one dispute before a Critical/High blocks a gate |
 | `docs/specs/_templates/retro.md` | Short per-feature retro after release, carried into the next `/plan-grill` |
+| `docs/specs/_templates/feature-status.md` + `docs/specs/STATUS.md` | Per-feature status file + a top-level index, so concurrent work on different features doesn't collide on one shared block of text |
 | `.github/workflows/ci.yml` | Lint/test/build/secret-scan/guard-rail pipeline (only if you picked GitHub Actions) |
 
 Nothing here is invented per project — every value comes from an interview you confirm before anything is written, and existing files are never overwritten silently.
@@ -57,18 +62,18 @@ Each arrow is a **human gate**: the orchestrator summarizes what a subagent prod
 | 2 | Requirements | `planner` + `spec-writer` | `requirements.md` |
 | 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if the project has a UI) | `design.md`, ADRs, glossary, threat model, updated knowledge graph |
 | 4 | Task breakdown | `planner` | `tasks.md` (TDD-sized) |
-| 5 | TDD loop, per task | `test` → `implementer` | failing test → green → refactor |
-| 6 | Review & QA | `reviewer`, `qa` | Findings in the shared `findings-ledger.md`; integration/e2e/edge-case results |
+| 5 | TDD loop, per task | `test` → `implementer` (→ `debug` if the first fix attempt fails) | failing test → green → refactor |
+| 6 | Review & QA | `reviewer`, `qa` | Findings in the shared `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD` |
 | 7 | Security | `security` | `security-report.md`: exhaustive ASVS checklist (authN/authZ, injection, secrets/supply-chain, infra, API, business-logic abuse, compliance), DB-policy check; findings in the ledger |
 | 8 | CI/CD & docs | `devops-docs` | pipeline, README, changelog, tailored to the project's own scenario |
 | — | Retro | orchestrator | `retro.md`, applied before the next feature's `/plan-grill` |
 
 ## The security model (defense in depth)
 
-No agent can reach the system database — not by convention, by four independent layers:
+No agent can reach the system database or your cloud secrets — not by convention, by five independent layers:
 
-1. **Deny rules** (`permissions.deny` in `.claude/settings.json`) block every common DB CLI, ORM/migration runner, `docker exec`/`kubectl exec`, and reads/writes of `.env*`, `secrets/`, keys and credentials.
-2. **A PreToolUse hook** (`.claude/hooks/block-db-access.py`) catches what the deny list can't enumerate: raw connection strings, shell wrappers, piping through `bash -c`. It fails closed on malformed input.
+1. **Deny rules** (`permissions.deny` in `.claude/settings.json`) block every common DB CLI, ORM/migration runner, `docker exec`/`kubectl exec`/`kubectl get secret`, cloud secret-manager CLIs (`aws secretsmanager`/`ssm`, `gcloud secrets`, `az keyvault`, `vault`, `op`, `doppler`, `pass`), and reads/writes of `.env*`, `secrets/`, keys and credentials.
+2. **A PreToolUse hook** (`.claude/hooks/block-db-access.py`) catches what the deny list can't enumerate: raw connection strings, shell wrappers, piping through `bash -c`, the same secret-manager calls caught again in case a deny pattern is worked around. It fails closed on malformed input.
 3. **Textual rules** repeated in `CLAUDE.md`, `AGENTS.md`, and every single subagent prompt, so the model is told, not just blocked.
 4. **Structural guarantees**: no agent ever receives credentials; tests run against fakes/in-memory doubles or disposable containers a human starts; migrations are only ever *generated as files* for a human to review and apply.
 5. **Continuous verification**: `.claude/hooks/verify-guard.py` re-runs the deny-rule and hook-blocking checks in CI on every push/PR (wired into `ci.yml` when you picked GitHub Actions), so a weakened deny list or a disabled hook gets caught automatically instead of drifting silently.
@@ -81,7 +86,7 @@ If a task seems to need DB access, every agent is instructed to stop and ask —
 
 Just tell Claude Code you're starting a project — "novo projeto", "iniciar projeto", "setup do projeto", "bootstrap", "scaffold" all trigger it, even without naming the skill. It will:
 
-1. **Interview you** (`references/interview.md`) — project name, stack, DB engine, test strategy, compliance needs, CI provider, branching convention, engineering defaults to keep or override, whether the project has a UI (`HAS_UI`, gates the `designer` agent), and whether Node.js/`npx` is available (`NPX_CMD`, gates the MCP-backed knowledge graph). Anything you don't know is recorded as `TBD` and resolved later in `/plan-grill`, never guessed.
+1. **Interview you** (`references/interview.md`) — project name, stack, DB engine, test strategy, compliance needs, CI provider, branching convention, engineering defaults to keep or override, whether the project has a UI (`HAS_UI`, gates the `designer` agent), whether Node.js/`npx` is available (`NPX_CMD`, gates the MCP-backed knowledge graph), whether to optimize the agent team for `cost`/`balanced`/`quality` (`MODEL_PRIORITY`), and a minimum test coverage percentage to enforce (`COVERAGE_THRESHOLD`). Anything you don't know is recorded as `TBD` and resolved later in `/plan-grill`, never guessed.
 2. **Scaffold a dry run first**, show you the file list, then write for real:
    ```
    python scripts/scaffold.py --target <project-dir> --answers <answers.json> --dry-run
@@ -109,11 +114,12 @@ scripts/test_scaffold.py          regression suite for scaffold.py/verify_setup.
 assets/templates/                 everything scaffold.py copies into the generated project
   CLAUDE.md.tmpl, AGENTS.md.tmpl
   .claude/settings.json.tmpl, .claude/hooks/{block-db-access.py, verify-guard.py}
-  .claude/agents/*.md             planner, architect, domain, test, qa, implementer, reviewer, security,
-                                  devops-docs, knowledge-graph.md.tmpl, designer.md (only if HAS_UI=yes)
+  .claude/agents/*.md.tmpl         planner, architect, domain, test, qa, implementer, reviewer, security,
+                                  devops-docs, knowledge-graph, debug - model: line set by MODEL_PRIORITY;
+                                  designer.md.tmpl only generated if HAS_UI=yes
   .claude/skills/{orchestrate,plan-grill,spec-writer,amend-constitution}/SKILL.md
-  docs/specs/, docs/specs/_templates/{security-report,findings-ledger,retro}.md, docs/adr/, docs/glossary.md,
-  docs/test-strategy.md, docs/debugging-protocol.md
+  docs/specs/, docs/specs/_templates/{security-report,findings-ledger,retro,feature-status}.md, docs/adr/,
+  docs/glossary.md, docs/test-strategy.md, docs/debugging-protocol.md
   docs/knowledge-graph/README.md
   .github/workflows/ci.yml.tmpl    (the generated project's own CI, distinct from this repo's test.yml above)
 ```
@@ -127,6 +133,10 @@ assets/templates/                 everything scaffold.py copies into the generat
 - The MCP memory server itself is verified, not assumed: ran `@modelcontextprotocol/server-memory` directly (`tools/list`, `create_entities`, `read_graph`) and confirmed all 9 tool names, the duplicate-name skip behavior the idempotency rule relies on, and the on-disk `.jsonl` format. What's still unverified is Claude-Code-specific: whether `mcp__knowledge-graph__<tool>` is the exact subagent `tools:` allowlist syntax, and whether `$CLAUDE_PROJECT_DIR` expands inside `mcpServers.*.env` - confirm both the first time you actually run `/orchestrate` with a real knowledge-graph delegation.
 - `designer` is generated only when `HAS_UI` is yes; a pure API/CLI/library project won't get a UI/UX agent.
 - `security` is one agent with an exhaustive checklist, not a split team of specialists — depth comes from its instructions, not from agent count. The findings ledger gives review/QA/security one shared, disputable record instead of three independent reports, which narrows but doesn't eliminate that limit.
-- Role-tiered model defaults (`opus`/`sonnet`/`haiku`) assume all three tiers are available on your plan; if one isn't, tell the orchestrator to substitute at Start step 4 rather than letting a delegation fail silently.
+- Role-tiered model defaults (`opus`/`sonnet`/`haiku`, picked by `MODEL_PRIORITY`) assume all three tiers are available on your plan; if one isn't, tell the orchestrator to substitute at Start step 5 rather than letting a delegation fail silently.
 - `/amend-constitution` only exists as a skill the user invokes - there's no cron-style enforcement that engineering defaults were never hand-edited; it's a convention the skill supports, not a technical guarantee like the DB guard.
+- "Autonomous mode" only ever relaxes re-confirmation on phases 1-4; there is no setting, including this one, that skips the human gate on review/security/release. If you want full unattended runs, this isn't built for that.
+- Reverting a released feature is a documented checklist the orchestrator walks through with you, not an automated rollback command - `knowledge-graph` proposes what to remove, it never deletes on its own.
+- `COVERAGE_THRESHOLD` is carried through to `CLAUDE.md`/`AGENTS.md`/`ci.yml` as a real number, but actually enforcing it is `devops-docs`'s job once the stack's coverage tool is chosen - the scaffolded `ci.yml` step is a placeholder it replaces, not a working gate out of the box.
+- The `docs/specs/STATUS.md` index reduces the two-people-same-file collision risk (re-read-before-write is now an explicit rule) but doesn't eliminate it - there's no actual file lock, just a convention agents are told to follow.
 - Re-running `scaffold.py` without any flag on an already-scaffolded project adds new files (e.g. a newly-added agent) correctly, since existing files are skipped by default. For `.claude/settings.json` specifically, use `--merge-settings` (not `--overwrite`) to pick up new deny rules/hooks/`mcpServers` by key - it's covered by `scripts/test_scaffold.py::test_merge_settings_unions_deny_rules_without_clobbering_custom_keys`, including a custom top-level key surviving the merge untouched.
