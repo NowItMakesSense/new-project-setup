@@ -5,6 +5,7 @@ Usage: python scripts/test_scaffold.py           (or: python -m unittest scripts
 No third-party dependencies - stdlib unittest only, consistent with scaffold.py/verify_setup.py.
 """
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -151,6 +152,67 @@ class ScaffoldTests(unittest.TestCase):
         r = run_scaffold(self.target, base_answers(HAS_UI="no"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertFalse((self.target / ".claude" / "agents" / "designer.md").exists())
+
+    UI_AGENTS = ("designer", "frontend", "ui-reviewer")
+    UI_REFS = ("art-direction.md", "app-screens.md", "materials-type.md", "motion.md", "worst-case.md", "review.md")
+
+    def test_has_ui_yes_generates_frontend_team_and_craft_skill(self):
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for name in self.UI_AGENTS:
+            body = (self.target / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+            frontmatter = body.split("---")[1]
+            self.assertIn("skills:\n  - frontend-craft", frontmatter, name)
+            self.assertIn("Skill", next(line for line in frontmatter.splitlines() if line.startswith("tools:")), name)
+        skill = self.target / ".claude" / "skills" / "frontend-craft"
+        self.assertIn("name: frontend-craft", (skill / "SKILL.md").read_text(encoding="utf-8"))
+        for ref in self.UI_REFS:
+            self.assertTrue((skill / "references" / ref).is_file(), ref)
+
+    def test_has_ui_no_omits_frontend_team_and_craft_skill(self):
+        r = run_scaffold(self.target, base_answers(HAS_UI="no"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for name in self.UI_AGENTS:
+            self.assertFalse((self.target / ".claude" / "agents" / f"{name}.md").exists(), name)
+        self.assertFalse((self.target / ".claude" / "skills" / "frontend-craft").exists())
+
+    def test_has_ui_yes_passes_verify_with_answers(self):
+        answers_path = self.target.parent / (self.target.name + "-answers.json")
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        v = run_verify(self.target, answers_path)
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("agent preloads the frontend-craft skill: frontend", v.stdout)
+        self.assertIn("exists: frontend-craft/references/motion.md", v.stdout)
+
+    def test_verify_fails_when_ui_agent_missing_with_has_ui_yes(self):
+        answers_path = self.target.parent / (self.target.name + "-answers.json")
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        (self.target / ".claude" / "agents" / "ui-reviewer.md").unlink()
+        v = run_verify(self.target, answers_path)
+        self.assertNotEqual(v.returncode, 0)
+        self.assertIn("FAIL agent exists: ui-reviewer (HAS_UI=yes)", v.stdout)
+
+    def test_ui_agent_tiers_follow_model_priority(self):
+        expected = {"cost": ("sonnet", "sonnet"), "balanced": ("sonnet", "opus"), "quality": ("opus", "opus")}
+        for priority, (frontend, ui_reviewer) in expected.items():
+            with self.subTest(priority=priority):
+                target = Path(self._tmp.name) / f"proj-{priority}"
+                r = run_scaffold(target, base_answers(HAS_UI="yes", MODEL_PRIORITY=priority))
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                for name, model in (("frontend", frontend), ("ui-reviewer", ui_reviewer)):
+                    body = (target / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+                    self.assertIn(f"\nmodel: {model}\n", body, name)
+
+    def test_tasks_template_and_orchestrator_route_ui_tasks(self):
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tasks = (self.target / "docs" / "specs" / "_templates" / "tasks.md").read_text(encoding="utf-8")
+        self.assertIn("- Owner: implementer | frontend", tasks)
+        orchestrate = (self.target / ".claude" / "skills" / "orchestrate" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("`Owner: frontend`", orchestrate)
+        self.assertIn("`ui-reviewer`", orchestrate)
 
     def test_db_engine_set_generates_database_folder(self):
         r = run_scaffold(self.target, base_answers(DB_ENGINE="postgresql"))
@@ -415,10 +477,42 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn("3 entities, 2 relations", p.stdout)
         self.assertIn("WARN", p.stdout)  # Customer is a relation endpoint with no declared entity
         page = (kg_dir / "graph.html").read_text(encoding="utf-8")
-        self.assertIn("3d-force-graph@", page)
-        self.assertIn('"priced in"', page)
-        # An observation containing </script> must not be able to close the inline data block.
-        self.assertEqual(page.count("</script>"), 2)
+        start = page.index('<script id="kg-data" type="application/json">') + len('<script id="kg-data" type="application/json">')
+        block = page[start:page.index("</script>", start)]
+        # An observation containing </script> must not be able to close the data block: it is escaped
+        # inside it, and the block still parses as the full graph.
+        self.assertIn("<\\/script>", block)
+        data = json.loads(block)
+        self.assertEqual({n["id"] for n in data["nodes"]}, {"Order", "Money", "Customer"})
+        self.assertEqual(next(n for n in data["nodes"] if n["id"] == "Customer")["type"], "undeclared")
+        self.assertIn({"source": "Order", "target": "Money", "label": "priced in"}, data["links"])
+        self.assertIn("note </script><b>x</b>", next(n for n in data["nodes"] if n["id"] == "Order")["observations"])
+        self.assertNotIn("__DATA__", page)
+        self.assertNotIn("__TITLE__", page)
+
+    def test_render_graph_pins_exact_library_versions(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        template = (self.target / ".claude" / "scripts" / "graph-view.html").read_text(encoding="utf-8")
+        imports = json.loads(template.split('<script type="importmap">')[1].split("</script>")[0])["imports"]
+        self.assertTrue(imports)
+        for name, url in imports.items():
+            self.assertNotIn("@latest", url, name)
+            for package in re.findall(r"/((?:three|3d-force-graph|three-forcegraph|three-render-objects)@[^/?&,]+)", url):
+                self.assertRegex(package, r"@\d+\.\d+\.\d+$", (name, url))
+        self.assertRegex(imports["3d-force-graph"], r"3d-force-graph@\d+\.\d+\.\d+")
+
+    def test_render_graph_uses_title_and_writes_empty_page(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        script = self.target / ".claude" / "scripts" / "render-graph.py"
+        out = self.target / "empty.html"
+        p = subprocess.run([PY, str(script), "--graph-dir", str(self.target / "nope"), "--out", str(out),
+                            "--title", "Shop & <Co>"], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        page = out.read_text(encoding="utf-8")
+        self.assertIn("Shop &amp; &lt;Co&gt;", page)
+        self.assertIn('{"nodes": [], "links": []}', page)
 
     def test_render_graph_reads_markdown_fallback(self):
         r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
@@ -443,7 +537,7 @@ class ScaffoldTests(unittest.TestCase):
         agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
         tools_line = next(line for line in agent.splitlines() if line.startswith("tools:"))
         self.assertIn("Bash", tools_line)
-        self.assertIn("python .claude/scripts/render-graph.py", agent)
+        self.assertIn('python .claude/scripts/render-graph.py --title "demo"', agent)
 
     def test_agents_carry_external_content_rule(self):
         r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
@@ -498,6 +592,16 @@ class RetuneTests(unittest.TestCase):
         r = run_retune(self.target, "--model-priority", "quality")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertFalse((self.target / ".claude" / "agents" / "designer.md").exists())
+
+    def test_model_priority_retunes_frontend_team(self):
+        target = Path(self._tmp.name) / "ui-proj"
+        r = run_scaffold(target, base_answers(HAS_UI="yes", MODEL_PRIORITY="cost"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = run_retune(target, "--model-priority", "quality")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for name in ("frontend", "ui-reviewer"):
+            body = (target / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+            self.assertIn("\nmodel: opus\n", body, name)
 
     def test_updates_answers_json_and_verify_then_passes(self):
         r = run_retune(self.target, "--model-priority", "quality", "--answers", str(self.answers_path))

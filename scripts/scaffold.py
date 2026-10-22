@@ -29,18 +29,26 @@ TIER_PRESETS = {
         "PLANNER": "sonnet", "ARCHITECT": "sonnet", "DOMAIN": "sonnet", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "sonnet", "SECURITY": "sonnet",
         "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "sonnet",
+        "FRONTEND": "sonnet", "UI_REVIEWER": "sonnet",
     },
     "balanced": {
         "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "sonnet", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
         "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "opus",
+        "FRONTEND": "sonnet", "UI_REVIEWER": "opus",
     },
     "quality": {
         "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "opus", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
         "DEVOPS_DOCS": "sonnet", "KNOWLEDGE_GRAPH": "opus", "DESIGNER": "sonnet", "DEBUG": "opus",
+        "FRONTEND": "opus", "UI_REVIEWER": "opus",
     },
 }
+# Generated only when HAS_UI is yes: the front-end team and the house rules they share.
+UI_ONLY_FILES = {
+    ".claude/agents/designer.md.tmpl", ".claude/agents/frontend.md.tmpl", ".claude/agents/ui-reviewer.md.tmpl",
+}
+UI_ONLY_PREFIX = ".claude/skills/frontend-craft/"
 TEMPLATES = Path(__file__).resolve().parent.parent / "assets" / "templates"
 VAR = re.compile(r"\{\{([A-Z_]+)\}\}")
 
@@ -165,8 +173,9 @@ def main() -> None:
         rel = src.relative_to(TEMPLATES)
         if rel.as_posix().startswith(".github/") and values["_CI"] != "github-actions":
             continue
-        if rel.as_posix() == ".claude/agents/designer.md.tmpl" and values["_HAS_UI"] != "yes":
-            continue
+        if rel.as_posix() in UI_ONLY_FILES or rel.as_posix().startswith(UI_ONLY_PREFIX):
+            if values["_HAS_UI"] != "yes":
+                continue
         if rel.as_posix().startswith("Database/") and values["_HAS_DB"] != "yes":
             continue
         if rel.as_posix() == ".mcp.json.tmpl" and values["_HAS_MCP"] != "yes":

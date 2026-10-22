@@ -2,6 +2,40 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (2)
+
+**A front-end team for projects with a UI, and the knowledge-graph view rebuilt with it.** The first `graph.html` looked generic (stock spheres, floating boxes, hover-only labels), and the cause was general: nothing in a generated project carried design-engineering taste past the UX `designer`. Both are now built on two MIT-licensed skill collections - Emil Kowalski's skills (motion, polish, worst-case data, Apple's fluid-interface principles) and Leonxlnx's taste-skill (art direction, app-screen rules from measured product screens, a real-browser inspector).
+
+- **New `frontend-craft` project skill** (only when `HAS_UI` is yes): a short `SKILL.md` plus six references (`art-direction`, `app-screens`, `materials-type`, `motion`, `worst-case`, `review`), distilled in this project's own words with credits. It is self-contained, so teammates don't need a global install; when the original skills are installed globally it defers to them, including taste-skill's `draw.mjs` (deals a direction/app style) and `inspect.mjs` (measures the page in headless Chrome at 1440/768/390).
+- **Two new agents, one upgraded** (all gated on `HAS_UI`, all preloading `frontend-craft` through the subagent `skills:` frontmatter - a listed skill that isn't installed is skipped by Claude Code, not an error):
+  - `designer` now also owns the art direction in `design.md` → UX: screen kind and its one question, direction/style and "face", tokens, a motion spec table, worst-case states, and any deliberate house-rule exception with its reason.
+  - `frontend` builds tasks marked `Owner: frontend` in phase 5, under the same Iron Law as `implementer`, and renders the worst-case fixtures (plus `inspect.mjs` when available) before reporting done.
+  - `ui-reviewer` reviews the rendered UI in phase 6 and logs **Before | After | Why** findings in the shared ledger with the usual Open/Confirmed/Retracted flow; Write is limited to that ledger.
+- **Routing:** `tasks.md` tasks carry `- Owner: implementer | frontend` (set by `planner`/`spec-writer`); the orchestrator routes phase 5 by owner and adds `ui-reviewer` to phase 6 when any task had `Owner: frontend`. The `design.md` template's UX section lists the new art-direction fields.
+- **Tiers:** `FRONTEND`/`UI_REVIEWER` are in `TIER_PRESETS` (cost sonnet/sonnet, balanced sonnet/opus, quality opus/opus); `retune.py` covers both. `verify_setup.py` requires the three agents and the skill with its six references when `HAS_UI=yes`, and checks each UI agent preloads `frontend-craft`.
+- **KG view rebuilt** as an app screen, using taste-skill's dealt style `true-black-flat` (seed 331266591) with a cool near-black ground as its face:
+  - The page now lives in a template, `.claude/scripts/graph-view.html`, which `render-graph.py` fills. The data moved into a `<script type="application/json">` block, with `</` escaped.
+  - **The stage:** a full-viewport canvas whose top bar answers the screen's question ("23 concepts in 3 bounded contexts · 28 relations"). The four DDD kinds that carry the model get the only hues; bounded contexts are drawn as rings, other kinds are neutral, and undeclared endpoints are grey wireframes.
+  - **Glow:** sits only on the data marks, as an additive halo texture rather than a bloom pass. This is the one deliberate exception to taste's "no glows" app rule.
+  - **Labels:** HTML (CSS2D) in Inter, shown only on hubs, the selection and the hover, with a collision pass.
+  - **Interactions:**
+    - Hover isolates a concept's neighbourhood.
+    - Clicking flies the camera (700ms ease-in-out, interruptible, starting from where the camera is) and opens a detail sheet (in 240ms / out 180ms, ease-out, CSS transitions).
+    - `/` and `Ctrl/⌘+K` open a command palette with no animation, since it's keyboard-driven. Esc closes the palette, then the sheet; F fits the view.
+    - Legend rows hide a kind; the toolbar toggles labels and auto-rotate.
+  - **Other states and modes:** reduced motion, higher contrast, a designed empty state, and an offline fallback that lists every concept.
+  - **Libraries:** pinned to three 0.186.1 and 3d-force-graph 1.80.1 (with three-forcegraph 1.43.6 and three-render-objects 1.43.0) via esm.sh `?external=three`, so the page loads exactly one three.js instance. jsDelivr's `+esm` builds mixed three r164/r168/r185, so they weren't usable.
+  - `knowledge-graph` now passes `--title "{{PROJECT_NAME}}"`.
+- **Two library problems found and worked around while testing:**
+  - 3d-force-graph's node drag-end handler calls an OrbitControls internal that throws on a plain click with three r186, so node dragging is off. It isn't needed for exploring.
+  - The library keeps hit-testing its last pointer position after the pointer moves onto an overlay, which left the hover stuck. Hover now only counts while the pointer is over the canvas.
+- **Verified:**
+  - 56 regression tests pass. The new tests cover the UI team gating, verify with `HAS_UI=yes`, a missing UI agent, tiers per preset, retune, task routing, the escaped data block parsed back as JSON, exact version pins, and `--title` escaping.
+  - taste-skill's `inspect.mjs --app` reports 0 FAIL / 0 WARN on a 23-concept fixture. Two earlier rounds fixed a `text-shadow` FAIL (now a scrim behind labels) and too-small label text.
+  - A real-input CDP script covering hover, click, relation navigation, Esc, `/`, typing, arrow keys, Enter, Ctrl+K, legend, Rotate, Labels and F reported no page errors. It also checked reduced motion and the offline fallback (esm.sh blocked).
+  - Screenshots were reviewed for the empty, single, long-name/HTML-injection and 1,500-node fixtures.
+- **Not verified:** a hands-on session in a regular browser. The Claude in Chrome extension wasn't reachable, so all browser checks ran in headless Chrome.
+
 ## 2026-10-22
 
 **The knowledge graph now has an interactive 3D view.** New `.claude/scripts/render-graph.py`, generated into every project, turns the graph into `docs/knowledge-graph/graph.html`: entities as spheres coloured by `entityType` and sized by degree, relations as labelled directional arrows, a search box, a clickable legend that hides a type, and a side panel listing the selected entity's observations and its incoming/outgoing relations (click a neighbour to jump to it).

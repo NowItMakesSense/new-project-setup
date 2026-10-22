@@ -59,11 +59,12 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/hooks/block-db-access.py` + `db_patterns.json` | Hard block of DB CLIs, DB URLs, secrets; rules in the sibling JSON, fails closed if it's missing/invalid |
 | `.claude/hooks/verify-guard.py` | CI guard-rail check: re-runs the deny-rule/hook checks on every push/PR, wired into `ci.yml` |
 | `.claude/scripts/check-traceability.py` | Verifies REQ-ID linkage between `requirements.md`/`tasks.md` (run by `qa` before phase 6, wired into `ci.yml`) |
-| `.claude/scripts/render-graph.py` | Renders the knowledge graph (`graph.jsonl`, or `graph.md` in fallback) to an interactive 3D `docs/knowledge-graph/graph.html`; re-run by `knowledge-graph` after every graph change |
-| `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and designer (only when `HAS_UI` is yes); each has a role-tiered default model (opus/sonnet/haiku) set by `MODEL_PRIORITY`, overridable per project |
+| `.claude/scripts/render-graph.py` + `graph-view.html` | Renders the knowledge graph (`graph.jsonl`, or `graph.md` in fallback) to an interactive 3D `docs/knowledge-graph/graph.html`; re-run by `knowledge-graph` after every graph change |
+| `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and - only when `HAS_UI` is yes - the front-end team `designer`, `frontend` and `ui-reviewer`; each has a role-tiered default model (opus/sonnet/haiku) set by `MODEL_PRIORITY`, overridable per project |
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
 | `.claude/skills/spec-writer` | Writes requirements/design/tasks specs per feature |
+| `.claude/skills/frontend-craft` + `references/` (only when `HAS_UI` is yes) | House rules the front-end team preloads: art direction, app screens, type/colour/surfaces, motion, worst-case data, the Before/After/Why review format - distilled from Emil Kowalski's skills and taste-skill (both MIT), deferring to them when installed globally |
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults deliberately, with an ADR - never the DB-access directive |
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |

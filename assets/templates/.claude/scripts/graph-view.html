@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__TITLE__ · Knowledge graph</title>
+<!--
+  Generated view of docs/knowledge-graph/ - do not edit the copy in docs/, re-run
+  .claude/scripts/render-graph.py instead. This template is .claude/scripts/graph-view.html.
+
+  Design: an app screen (taste-skill app-screens, style "true-black-flat") whose one question is
+  "what does the domain contain and how does it connect?" - the graph is the biggest thing on it.
+  Colour lives on data only (the nodes), elevation is a lightness step, nothing at rest has a border
+  or shadow. Motion follows Emil Kowalski's rules: keyboard actions never animate, UI moves stay
+  under 300ms with strong ease-out curves, exits are faster than entrances, camera moves can be
+  interrupted and start from where the camera is. The node glow is the one deliberate exception to
+  the "no glows" app rule: it sits on data, never on chrome.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    /* true-black-flat, cool near-black ground for a developer tool */
+    --ground: #0c0d0f;
+    --surface: #15171a;
+    --raised: #23262b;
+    --active: #2c3036;
+    --control: #444444;
+    --text: #ffffff;
+    --muted: #b4b4b4;
+    --faint: #949494;
+    --accent: #c6f24e;            /* the one data hue: aggregates, the heart of the model */
+    --pill-warning-bg: #2b2414; --pill-warning-ink: #e5a93b;
+    --radius-card: 20px;
+    --radius-control: 999px;
+    --gap: 14px;
+    --pad: 22px;
+    --control-height: 36px;
+    --bar: 48px;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ground); color: var(--text); }
+  body {
+    font: 400 14px/20px var(--font);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .num { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+  /* ---------- shell ---------- */
+  .bar {
+    position: fixed; inset: 0 0 auto 0; z-index: 3;
+    height: calc(var(--bar) + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 24px 0;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--ground);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; max-width: 45%; }   /* the name yields last */
+  .brand svg { flex-shrink: 0; }
+  .brand h1 {
+    margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .question { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .pill-warning {
+    flex-shrink: 0; height: 22px; padding: 0 10px; border-radius: 999px; border: 0;
+    background: var(--pill-warning-bg); color: var(--pill-warning-ink); font-size: 12px; font-weight: 500;
+  }
+  .bar .spacer { flex: 1; }
+  .search {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    height: var(--control-height); padding: 0 8px 0 16px; width: 260px;
+    border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--faint);
+    transition: transform 160ms var(--ease-out);
+  }
+  .search span { flex: 1; text-align: left; }
+  kbd {
+    font: 500 12px/20px var(--font); color: var(--muted); padding: 0 7px; border-radius: 6px;
+    background: var(--raised);
+  }
+
+  /* ---------- stage ---------- */
+  #stage { position: fixed; inset: calc(var(--bar) + env(safe-area-inset-top, 0px)) 0 0 0; }
+  #stage canvas { display: block; outline: none; }
+  .labels { pointer-events: none; }
+  .label {
+    pointer-events: none; white-space: nowrap;
+    font: 500 13px/18px var(--font); color: var(--muted);
+    padding: 0 6px; border-radius: 6px; background: rgba(12, 13, 15, 0.72);   /* a scrim, not a shadow */
+    transform: translateY(calc(-100% - 10px));
+  }
+  .label.strong { color: var(--text); font-weight: 600; }
+  .label.dim, .label.clash { opacity: 0; }
+
+  /* ---------- floating surfaces (no border, no shadow: a lightness step) ---------- */
+  .card { background: var(--surface); border-radius: var(--radius-card); }
+  .legend {
+    position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2;
+    width: 236px; max-height: calc(100dvh - var(--bar) - 112px); overflow: auto; padding: 14px 8px 8px;
+  }
+  .legend h2, .sheet h3 { margin: 0 12px 6px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--faint); }
+  .legend button {
+    width: 100%; height: 34px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent;
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    transition: transform 160ms var(--ease-out), opacity 160ms ease;
+  }
+  .legend button .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend button .count { color: var(--muted); }
+  .legend button[aria-pressed="false"] { opacity: 0.4; }
+  .swatch { flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%; }
+  .swatch.ring { background: transparent !important; box-shadow: inset 0 0 0 2px var(--swatch); }
+  .swatch.hollow { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); border: 1.5px dashed transparent; }
+
+  .tools {
+    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2;
+    display: flex; gap: 8px; padding: 6px; border-radius: 999px; background: var(--surface);
+  }
+  .tool {
+    height: var(--control-height); padding: 0 16px; border: 0; border-radius: var(--radius-control);
+    background: var(--raised); color: var(--text); font-weight: 500;
+    transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease;
+  }
+  .tool[aria-pressed="true"] { background: var(--text); color: #000; }   /* primary by inversion */
+
+  /* ---------- detail sheet: in from the right, out the same way, faster ---------- */
+  .sheet {
+    position: fixed; z-index: 2; top: calc(var(--bar) + env(safe-area-inset-top, 0px) + 8px); right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100vw - 32px)); overflow: auto; padding: var(--pad) 8px 12px;
+    transform: translateX(calc(100% + 24px)); opacity: 0; visibility: hidden;
+    transition: transform 180ms var(--ease-out), opacity 180ms ease, visibility 0s linear 180ms;
+  }
+  .sheet.open {
+    transform: none; opacity: 1; visibility: visible;
+    transition: transform 240ms var(--ease-out), opacity 240ms ease, visibility 0s;
+  }
+  .sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px; }
+  .sheet-head > div { flex: 1; min-width: 0; }
+  .kind { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; line-height: 16px; }
+  .sheet h2 {
+    margin: 6px 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .meta { color: var(--faint); font-size: 12px; }
+  .close {
+    flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 999px; background: var(--raised);
+    display: grid; place-items: center; transition: transform 160ms var(--ease-out);
+  }
+  .sheet section { margin-top: 20px; }
+  .sheet ul { list-style: none; margin: 0; padding: 0; }
+  .obs li { padding: 8px 14px; color: var(--text); overflow-wrap: anywhere; }
+  .obs li + li { border-top: 1px solid var(--raised); }
+  .rel-group { margin-top: 12px; }
+  .rel-group h4 { margin: 0 14px 2px; font-size: 12px; font-weight: 500; color: var(--faint); overflow-wrap: anywhere; }
+  .hop {
+    width: 100%; min-height: 40px; padding: 8px 14px; border: 0; border-radius: 12px; background: transparent;
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  }
+  .hop .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .hop .dir { color: var(--faint); font-size: 12px; flex-shrink: 0; }
+  .empty-note { padding: 8px 14px; color: var(--faint); }
+
+  /* ---------- command palette: keyboard-opened, so it never animates ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 4; background: rgba(0, 0, 0, 0.5); }
+  .palette {
+    position: fixed; z-index: 5; left: 50%; top: 96px; transform: translateX(-50%);
+    width: min(560px, calc(100vw - 32px)); padding: 8px; background: var(--surface); border-radius: var(--radius-card);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);   /* it floats */
+  }
+  .palette input {
+    width: 100%; height: 48px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--raised);
+    font-size: 16px; outline: none;
+  }
+  .palette input::placeholder { color: var(--faint); }
+  .results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 360px; overflow: auto; }
+  .results li {
+    display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-radius: 12px; cursor: pointer;
+  }
+  .results li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .results li .type { color: var(--faint); font-size: 12px; flex-shrink: 0; }
+  .results li[aria-selected="true"] { background: var(--raised); }
+  .results .none { color: var(--faint); cursor: default; overflow-wrap: anywhere; height: auto; padding: 10px 14px; }
+
+  /* ---------- whole-screen states ---------- */
+  .state {
+    position: fixed; z-index: 1; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(520px, calc(100vw - 32px)); padding: 28px; max-height: calc(100dvh - 120px); overflow: auto;
+  }
+  .state h2 { margin: 0 0 8px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .state p { margin: 0 0 12px; color: var(--muted); }
+  .state code { font: 500 13px/20px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text);
+    background: var(--raised); padding: 2px 8px; border-radius: 6px; overflow-wrap: anywhere; }
+  .state ul { margin: 12px 0 0; padding: 0; list-style: none; }
+  .state li { padding: 6px 0; display: flex; gap: 10px; align-items: center; overflow-wrap: anywhere; }
+  .state li + li { border-top: 1px solid var(--raised); }
+
+  @media (hover: hover) and (pointer: fine) {
+    .legend button:hover, .hop:hover { background: var(--raised); }
+    .tool[aria-pressed="false"]:hover, .tool:not([aria-pressed]):hover, .close:hover { background: var(--active); }
+    .search:hover { color: var(--muted); }
+  }
+  .legend button:active, .tool:active, .hop:active, .close:active, .search:active, .pill-warning:active { transform: scale(0.97); }
+
+  @media (max-width: 720px) {
+    .question, .search span, .search kbd { display: none; }
+    .search { width: var(--control-height); padding: 0; justify-content: center; }
+    .bar { padding-inline: 16px; gap: 12px; }
+    .legend { display: none; }
+    .sheet { top: auto; left: 16px; right: 16px; width: auto; max-height: 55dvh;
+      transform: translateY(calc(100% + 24px)); }
+    .tools { left: 16px; right: 16px; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .sheet.open { transform: none; transition: opacity 160ms ease, visibility 0s linear 160ms; }
+    .sheet.open { transition: opacity 160ms ease, visibility 0s; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --muted: #d6d6d6; --faint: #bdbdbd; }
+    .card, .tools, .palette { box-shadow: inset 0 0 0 1px #5a5a5a; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <path d="M5 16.5 11 5.5l6 11" fill="none" stroke="#c6f24e" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M5 16.5h12" fill="none" stroke="#c6f24e" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+      <circle cx="11" cy="5.5" r="2.6" fill="#c6f24e"/><circle cx="5" cy="16.5" r="2.6" fill="#e6e6e6"/><circle cx="17" cy="16.5" r="2.6" fill="#e6e6e6"/>
+    </svg>
+    <h1 id="title">__TITLE__</h1>
+  </div>
+  <span class="question" id="question"></span>
+  <button class="pill-warning num" id="undeclared" hidden></button>
+  <span class="spacer"></span>
+  <button class="search" id="open-search" aria-label="Search concepts" aria-keyshortcuts="/ Control+K Meta+K">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m10.5 10.5 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>Search concepts</span><kbd>/</kbd>
+  </button>
+</header>
+
+<main id="stage" aria-label="3D knowledge graph"></main>
+
+<nav class="legend card" id="legend" aria-label="Concept types" hidden><h2>Types</h2><div id="legend-rows"></div></nav>
+
+<div class="tools" id="tools" role="toolbar" aria-label="View" hidden>
+  <button class="tool" id="t-labels" aria-pressed="true">Labels</button>
+  <button class="tool" id="t-rotate" aria-pressed="false">Rotate</button>
+  <button class="tool" id="t-fit" aria-keyshortcuts="F">Fit</button>
+</div>
+
+<aside class="sheet card" id="sheet" aria-label="Concept details" inert>
+  <div class="sheet-head">
+    <div>
+      <div class="kind"><span class="swatch" id="d-swatch"></span><span id="d-type"></span></div>
+      <h2 id="d-name"></h2>
+      <div class="meta num" id="d-meta"></div>
+    </div>
+    <button class="close" id="d-close" aria-label="Close details">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <section id="d-obs-wrap"><h3>Observations</h3><ul class="obs" id="d-obs"></ul></section>
+  <section id="d-rel-wrap"><h3>Relations</h3><div id="d-rels"></div></section>
+</aside>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="Search concepts" hidden>
+  <input id="q" type="text" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list"
+         placeholder="Search concepts by name or type" autocomplete="off" spellcheck="false">
+  <ul class="results" id="results" role="listbox"></ul>
+</div>
+
+<div class="state card" id="state" hidden></div>
+
+<script id="kg-data" type="application/json">__DATA__</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://esm.sh/three@0.186.1",
+  "three/": "https://esm.sh/three@0.186.1/",
+  "3d-force-graph": "https://esm.sh/3d-force-graph@1.80.1?external=three&deps=three-forcegraph@1.43.6,three-render-objects@1.43.0"
+} }
+</script>
+<script type="module">
+const DATA = JSON.parse(document.getElementById("kg-data").textContent);
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const fmt = new Intl.NumberFormat(undefined);
+const plural = new Intl.PluralRules("en");
+const count = (n, one, many) => `${fmt.format(n)} ${plural.select(n) === "one" ? one : many}`;
+
+// ---------- the model ----------
+// The four DDD kinds that carry the model get the screen's hues; everything else stays neutral, so
+// colour still means something (taste: at most four hues, colour on data only).
+const KINDS = {
+  aggregate:      { label: "Aggregate", color: "#c6f24e", rank: 1 },
+  entity:         { label: "Entity", color: "#e6e6e6", rank: 2 },
+  valueobject:    { label: "Value object", color: "#7fb4ff", rank: 3 },
+  domainevent:    { label: "Domain event", color: "#e5a93b", rank: 4 },
+  boundedcontext: { label: "Bounded context", color: "#ffffff", rank: 0, ring: true },
+};
+const ALIASES = { aggregateroot: "aggregate", vo: "valueobject", value: "valueobject", event: "domainevent",
+  context: "boundedcontext", bc: "boundedcontext" };
+const NEUTRALS = ["#8a8a8a", "#6b6b6b", "#a3a3a3", "#5c5c5c"];
+// "BoundedContext" / "value_object" -> "Bounded context" / "Value object": the project's word, set as a label.
+const humanize = (t) => { const s = String(t).replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
+const kindKey = (t) => { const k = String(t).toLowerCase().replace(/[\s_-]+/g, ""); return ALIASES[k] || k; };
+const typeStyle = {};
+let neutralIx = 0;
+for (const t of [...new Set(DATA.nodes.map((n) => n.type))].sort()) {
+  const k = KINDS[kindKey(t)];
+  if (t === "undeclared") typeStyle[t] = { label: "Undeclared", color: "#5a5a5a", rank: 99, hollow: true };
+  else if (k) typeStyle[t] = { ...k, label: humanize(t) };   // keep the project's own word for its kind
+  else typeStyle[t] = { label: humanize(t), color: NEUTRALS[neutralIx++ % NEUTRALS.length], rank: 10 };
+}
+const byId = new Map(DATA.nodes.map((n) => [n.id, n]));
+for (const n of DATA.nodes) { n.out = []; n.in = []; }
+for (const l of DATA.links) { byId.get(l.source).out.push(l); byId.get(l.target).in.push(l); }
+const degree = (n) => n.out.length + n.in.length;
+const big = DATA.nodes.length > 800;
+const hubs = new Set([...DATA.nodes].filter((n) => degree(n) >= 2).sort((a, b) => degree(b) - degree(a))
+  .slice(0, Math.min(big ? 25 : 40, Math.ceil(DATA.nodes.length * (DATA.nodes.length <= 60 ? 0.4 : 0.15)))).map((n) => n.id));
+const contexts = DATA.nodes.filter((n) => typeStyle[n.type].ring).length;
+const undeclared = DATA.nodes.filter((n) => n.type === "undeclared").length;
+
+// ---------- the title row answers the screen's question ----------
+const concepts = DATA.nodes.length;
+$("question").textContent = concepts === 0 ? "" :
+  (contexts ? `${count(concepts, "concept", "concepts")} in ${count(contexts, "bounded context", "bounded contexts")}` : count(concepts, "concept", "concepts"))
+  + ` · ${count(DATA.links.length, "relation", "relations")}`;
+$("question").classList.add("num");
+if (undeclared) {
+  const u = $("undeclared");
+  u.hidden = false;
+  u.textContent = `${fmt.format(undeclared)} undeclared`;
+  u.title = "Relation endpoints with no entity of their own - usually a missing create_entities call";
+  u.addEventListener("click", () => window.openPalette?.("undeclared"));
+}
+
+function swatchFor(type) {
+  const s = el("span", "swatch");
+  const st = typeStyle[type];
+  s.style.background = st.color;
+  s.style.setProperty("--swatch", st.color);
+  if (st.ring) s.classList.add("ring");
+  if (st.hollow) s.classList.add("hollow");
+  return s;
+}
+
+function showState(title, lines, listNodes) {
+  const box = $("state");
+  box.replaceChildren(el("h2", null, title), ...lines.map((l) => {
+    const p = el("p");
+    for (const part of l) p.append(typeof part === "string" ? part : el("code", null, part.code));
+    return p;
+  }));
+  if (listNodes) {
+    const ul = el("ul");
+    for (const n of [...listNodes].sort((a, b) => typeStyle[a.type].rank - typeStyle[b.type].rank || a.id.localeCompare(b.id))) {
+      const li = el("li"); li.append(swatchFor(n.type), el("span", null, n.id), el("span", "meta", typeStyle[n.type].label)); ul.append(li);
+    }
+    box.append(ul);
+  }
+  box.hidden = false;
+  $("open-search").hidden = $("undeclared").hidden = true;   // nothing to search or open in a whole-screen state
+}
+
+if (concepts === 0) {
+  showState("No concepts yet", [
+    ["The graph fills as the knowledge-graph agent records the bounded contexts, aggregates and entities named in discovery.md and in each approved design.md."],
+    ["It re-renders this page after every change; to refresh it by hand run ", { code: "python .claude/scripts/render-graph.py" }, "."],
+  ]);
+} else {
+  boot().catch((err) => {
+    console.error(err);
+    showState("The 3D view couldn't load", [
+      ["It needs network access to fetch three.js and 3d-force-graph from esm.sh, and a browser with WebGL."],
+      ["Every concept in the graph is listed below in the meantime."],
+    ], DATA.nodes);
+  });
+}
+
+// ---------- the 3D view ----------
+async function boot() {
+  const THREE = await import("three");
+  const { CSS2DRenderer, CSS2DObject } = await import("three/examples/jsm/renderers/CSS2DRenderer.js");
+  const { default: ForceGraph3D } = await import("3d-force-graph");
+
+  const ground = new THREE.Color("#0c0d0f");
+  const halo = (() => {                      // the glow lives in a texture on the data marks only
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const g = c.getContext("2d"), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    r.addColorStop(0, "rgba(255,255,255,0.55)"); r.addColorStop(0.35, "rgba(255,255,255,0.16)"); r.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const sphere = new THREE.SphereGeometry(1, big ? 12 : 24, big ? 8 : 16);
+  const torus = new THREE.TorusGeometry(1, 0.07, 10, 64);
+
+  let selected = null, hovered = null, focusSet = null;
+  let framing = true;
+  let overCanvas = false;           // the camera follows the settling layout until someone takes it
+  const hiddenTypes = new Set();
+  let showLabels = true;
+
+  function buildNode(n) {
+    const st = typeStyle[n.type];
+    const r = st.ring ? 7 + Math.sqrt(degree(n)) * 2.2 : 2.4 + Math.sqrt(degree(n)) * 1.6;
+    const group = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: st.color, transparent: true, wireframe: !!st.hollow });
+    const body = new THREE.Mesh(st.ring ? torus : sphere, mat);
+    body.scale.setScalar(r);
+    group.add(body);
+    if (st.ring) { const core = new THREE.Mesh(sphere, mat); core.scale.setScalar(1.6); group.add(core); }
+    let glow = null;
+    if (!st.hollow && (!big || hubs.has(n.id))) {
+      glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, color: st.color, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: st.ring ? 0.25 : 0.6 }));
+      glow.scale.setScalar(r * (st.ring ? 3 : 5.2));
+      group.add(glow);
+    }
+    // CSS2DRenderer owns the wrapper's transform, so the offset above the node lives on the inner label.
+    const wrap = el("div");
+    const label = el("div", "label", n.id.length > 28 ? n.id.slice(0, 27) + "…" : n.id);
+    label.title = n.id;
+    wrap.append(label);
+    const tag = new CSS2DObject(wrap);
+    tag.position.set(0, r, 0);
+    group.add(tag);
+    n.__parts = { mat, glow, label, baseGlow: glow ? glow.material.opacity : 0 };
+    paintNode(n);
+    return group;
+  }
+
+  const neighbours = (n) => new Set([n.id, ...n.out.map((l) => idOf(l.target)), ...n.in.map((l) => idOf(l.source))]);
+  const idOf = (end) => (typeof end === "object" ? end.id : end);
+  const touches = (l, n) => n && (idOf(l.source) === n.id || idOf(l.target) === n.id);
+
+  function paintNode(n) {
+    const p = n.__parts; if (!p) return;
+    const lead = hovered || selected;
+    const on = !focusSet || focusSet.has(n.id);
+    p.mat.opacity = on ? 1 : 0.07;
+    if (p.glow) p.glow.material.opacity = on ? p.baseGlow : 0;
+    const isLead = lead && n.id === lead.id;
+    const labelled = isLead || (focusSet ? focusSet.has(n.id) && (showLabels || n === selected) : showLabels && hubs.has(n.id));
+    p.label.classList.toggle("dim", !labelled);
+    p.label.classList.toggle("strong", !!isLead || (!focusSet && hubs.has(n.id) && degree(n) >= 4));
+  }
+
+  function paint() {
+    const lead = hovered || selected;
+    focusSet = lead ? neighbours(lead) : null;
+    for (const n of DATA.nodes) paintNode(n);
+    Graph.linkColor(Graph.linkColor()).linkWidth(Graph.linkWidth()).linkDirectionalParticles(Graph.linkDirectionalParticles());
+  }
+
+  const stage = $("stage");
+  const labelLayer = new CSS2DRenderer();
+  labelLayer.domElement.classList.add("labels");
+  const Graph = new ForceGraph3D(stage, { controlType: "orbit", extraRenderers: [labelLayer] })
+    .width(stage.clientWidth).height(stage.clientHeight)
+    .backgroundColor("#0c0d0f")
+    .showNavInfo(false)
+    // Node dragging off: an explorer doesn't need it, and the library's drag-end handler calls an
+    // OrbitControls internal (_onPointerCancel) that throws on a plain click with three r186.
+    .enableNodeDrag(false)
+    .warmupTicks(Math.min(300, 60 + Math.round(concepts / 2)))
+    .cooldownTicks(big ? 60 : 120)
+    .nodeId("id")
+    .nodeLabel(() => "")
+    .nodeThreeObject(buildNode)
+    .nodeVisibility((n) => !hiddenTypes.has(n.type))
+    .linkVisibility((l) => !hiddenTypes.has(byId.get(idOf(l.source)).type) && !hiddenTypes.has(byId.get(idOf(l.target)).type))
+    .linkColor((l) => (!focusSet ? "rgba(255,255,255,0.34)" : touches(l, hovered || selected) ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.04)"))
+    .linkWidth((l) => (selected && touches(l, selected) ? 0.6 : 0))
+    .linkDirectionalArrowLength(3.2)
+    .linkDirectionalArrowRelPos(1)
+    .linkDirectionalArrowColor((l) => Graph.linkColor()(l))
+    .linkDirectionalParticles((l) => (!reduceMotion.matches && selected && touches(l, selected) ? 2 : 0))
+    .linkDirectionalParticleWidth(1.4)
+    .linkDirectionalParticleSpeed(0.006)
+    .linkDirectionalParticleColor(() => "#c6f24e")
+    .linkLabel(() => "")
+    .onEngineTick(() => { if (framing) fit(0); })
+    .onEngineStop(() => { if (framing) fit(0); framing = false; })
+    .onNodeHover((n) => { hovered = (overCanvas && n) || null; stage.style.cursor = hovered ? "pointer" : ""; paint(); })
+    .onNodeClick((n) => select(n))
+    .onBackgroundClick(() => select(null))
+    .graphData(DATA);
+
+  Graph.renderer().domElement.setAttribute("aria-hidden", "true");
+  // The library keeps hit-testing its last pointer position after the pointer has moved onto the
+  // legend or the sheet (a type shown again under that spot would light up), so hover only counts
+  // while the pointer is really over the canvas.
+  const canvas = Graph.renderer().domElement;
+  canvas.addEventListener("pointerenter", () => { overCanvas = true; });
+  canvas.addEventListener("pointerleave", () => {
+    overCanvas = false;
+    if (hovered) { hovered = null; stage.style.cursor = ""; paint(); }
+  });
+  Graph.scene().fog = new THREE.FogExp2(ground, 0.0012);
+  const controls = Graph.controls();
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.autoRotateSpeed = 0.5;
+
+  // ---------- camera: our own tween so it starts from where the camera is and can be interrupted ----------
+  let flight = 0;
+  const bezier = (x1, y1, x2, y2) => (t) => {    // cubic-bezier solver (Newton), for the house curves
+    let x = t;
+    for (let i = 0; i < 6; i++) {
+      const cx = 3 * x * (1 - x) * (1 - x) * x1 + 3 * x * x * (1 - x) * x2 + x * x * x - t;
+      const dx = 3 * (1 - x) * (1 - x) * x1 + 6 * x * (1 - x) * (x2 - x1) + 3 * x * x * (1 - x2);
+      if (Math.abs(cx) < 1e-5 || !dx) break; x -= cx / dx;
+    }
+    return 3 * x * (1 - x) * (1 - x) * y1 + 3 * x * x * (1 - x) * y2 + x * x * x;
+  };
+  const easeInOut = bezier(0.77, 0, 0.175, 1);
+  function fly(toPos, toTarget, ms) {
+    const cam = Graph.camera(), from = cam.position.clone(), fromT = controls.target.clone();
+    const id = ++flight;
+    if (!ms || reduceMotion.matches) { cam.position.copy(toPos); controls.target.copy(toTarget); controls.update(); return; }
+    const t0 = performance.now();
+    const step = (now) => {
+      if (id !== flight) return;                  // a newer move took over from wherever we are
+      const k = easeInOut(Math.min(1, (now - t0) / ms));
+      cam.position.lerpVectors(from, toPos, k);
+      controls.target.lerpVectors(fromT, toTarget, k);
+      controls.update();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  stage.addEventListener("pointerdown", () => { flight++; framing = false; }, { capture: true });
+  stage.addEventListener("wheel", () => { framing = false; }, { capture: true, passive: true });   // grabbing the scene stops a flight
+
+  function fit(ms) {
+    const nodes = DATA.nodes.filter((n) => !hiddenTypes.has(n.type) && Number.isFinite(n.x));
+    if (!nodes.length) return;
+    const c = new THREE.Vector3();
+    for (const n of nodes) c.add(new THREE.Vector3(n.x, n.y, n.z));
+    c.divideScalar(nodes.length);
+    // Frame the 90th-percentile radius so one stray node doesn't shrink the whole model.
+    const d = nodes.map((n) => c.distanceTo(new THREE.Vector3(n.x, n.y, n.z))).sort((a, b) => a - b);
+    const radius = Math.max(20, d[Math.floor((d.length - 1) * 0.9)]);
+    const cam = Graph.camera();
+    const half = Math.tan((cam.fov * Math.PI) / 360) * Math.min(1, stage.clientWidth / stage.clientHeight);
+    const dist = (radius + 12) / half;
+    const dir = cam.position.clone().sub(controls.target);
+    if (dir.lengthSq() < 1) dir.set(0, 0, 1);
+    Graph.scene().fog.density = 0.5 / (radius * 2 + 200);
+    fly(c.clone().add(dir.normalize().multiplyScalar(dist)), c, ms);
+  }
+
+  function select(n) {
+    framing = false;
+    selected = n || null;
+    paint();
+    renderSheet();
+    if (n) {
+      const p = new THREE.Vector3(n.x, n.y, n.z);
+      const cam = Graph.camera();
+      const dir = cam.position.clone().sub(p).normalize();
+      fly(p.clone().add(dir.multiplyScalar(110 + Math.sqrt(degree(n)) * 12)), p, 700);
+    }
+  }
+
+  // ---------- detail sheet ----------
+  const sheet = $("sheet");
+  function renderSheet() {
+    const n = selected;
+    sheet.classList.toggle("open", !!n);
+    sheet.inert = !n;
+    if (!n) return;
+    const st = typeStyle[n.type];
+    $("d-swatch").replaceWith(Object.assign(swatchFor(n.type), { id: "d-swatch" }));
+    $("d-type").textContent = st.label;
+    $("d-name").textContent = n.id;
+    $("d-meta").textContent = `${count(degree(n), "relation", "relations")} · ${count(n.observations.length, "observation", "observations")}`;
+    const obs = $("d-obs");
+    obs.replaceChildren(...(n.observations.length ? n.observations.map((o) => el("li", null, o))
+      : [el("li", "empty-note", n.type === "undeclared" ? "Only appears as a relation endpoint - no entity declared yet." : "None recorded yet.")]));
+    const groups = new Map();
+    for (const l of n.out) { const k = l.label || "related to"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([byId.get(idOf(l.target)), "out"]); }
+    for (const l of n.in) { const k = l.label || "related to"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([byId.get(idOf(l.source)), "in"]); }
+    const rels = $("d-rels");
+    rels.replaceChildren();
+    if (!groups.size) rels.append(el("div", "empty-note", "No relations yet."));
+    for (const [label, items] of groups) {
+      const g = el("div", "rel-group");
+      g.append(el("h4", null, label));
+      for (const [m, dir] of items) {
+        const b = el("button", "hop");
+        b.append(swatchFor(m.type), el("span", "name", m.id), el("span", "dir", dir === "out" ? "outgoing" : "incoming"));
+        b.addEventListener("click", () => select(m));
+        g.append(b);
+      }
+      rels.append(g);
+    }
+    sheet.scrollTop = 0;
+  }
+  $("d-close").addEventListener("click", () => select(null));
+
+  // ---------- legend ----------
+  const rows = $("legend-rows");
+  const types = Object.keys(typeStyle).sort((a, b) => typeStyle[a].rank - typeStyle[b].rank || a.localeCompare(b));
+  for (const t of types) {
+    const b = el("button");
+    b.setAttribute("aria-pressed", "true");
+    b.append(swatchFor(t), el("span", "name", typeStyle[t].label), el("span", "count num", fmt.format(DATA.nodes.filter((n) => n.type === t).length)));
+    b.title = `Show or hide ${typeStyle[t].label}`;
+    b.addEventListener("click", () => {
+      hiddenTypes.has(t) ? hiddenTypes.delete(t) : hiddenTypes.add(t);
+      b.setAttribute("aria-pressed", String(!hiddenTypes.has(t)));
+      if (selected && hiddenTypes.has(selected.type)) select(null);
+      Graph.nodeVisibility(Graph.nodeVisibility()).linkVisibility(Graph.linkVisibility());
+      for (const n of DATA.nodes) if (n.__parts) n.__parts.label.style.visibility = hiddenTypes.has(n.type) ? "hidden" : "";
+    });
+    rows.append(b);
+  }
+  $("legend").hidden = false;
+
+  // ---------- toolbar ----------
+  const tLabels = $("t-labels"), tRotate = $("t-rotate");
+  tLabels.addEventListener("click", () => { showLabels = !showLabels; tLabels.setAttribute("aria-pressed", String(showLabels)); paint(); });
+  tRotate.addEventListener("click", () => {
+    controls.autoRotate = !controls.autoRotate && !reduceMotion.matches;
+    tRotate.setAttribute("aria-pressed", String(controls.autoRotate));
+  });
+  if (reduceMotion.matches) tRotate.hidden = true;
+  $("t-fit").addEventListener("click", () => fit(600));
+  $("tools").hidden = false;
+
+  // ---------- command palette ----------
+  const palette = $("palette"), scrim = $("scrim"), q = $("q"), results = $("results");
+  let matches = [], active = 0, lastFocus = null;
+  window.openPalette = (preset = "") => {
+    lastFocus = document.activeElement;
+    palette.hidden = scrim.hidden = false;
+    q.value = preset; search(); q.focus(); q.select();
+  };
+  function closePalette() { palette.hidden = scrim.hidden = true; lastFocus?.focus?.(); }
+  function search() {
+    const term = q.value.trim().toLowerCase();
+    matches = DATA.nodes.filter((n) => !term || n.id.toLowerCase().includes(term) || typeStyle[n.type].label.toLowerCase().includes(term))
+      .sort((a, b) => (b.id.toLowerCase().startsWith(term) - a.id.toLowerCase().startsWith(term)) || degree(b) - degree(a))
+      .slice(0, 8);
+    active = 0;
+    results.replaceChildren(...(matches.length ? matches.map((n, i) => {
+      const li = el("li");
+      li.id = `opt-${i}`; li.setAttribute("role", "option");
+      li.append(swatchFor(n.type), el("span", "name", n.id), el("span", "type", typeStyle[n.type].label));
+      li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(i); });
+      li.addEventListener("pointermove", () => mark(i));
+      return li;
+    }) : [el("li", "none", `No concept matches “${q.value.trim()}”.`)]));
+    mark(0);
+  }
+  function mark(i) {
+    active = i;
+    [...results.children].forEach((li, j) => li.setAttribute("aria-selected", String(j === i && !!matches.length)));
+    q.setAttribute("aria-activedescendant", matches.length ? `opt-${i}` : "");
+    results.children[i]?.scrollIntoView({ block: "nearest" });
+  }
+  function choose(i) {
+    const n = matches[i]; if (!n) return;
+    closePalette();
+    if (hiddenTypes.has(n.type)) rows.children[types.indexOf(n.type)]?.click();
+    select(n);
+  }
+  q.addEventListener("input", search);
+  q.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); mark(Math.min(matches.length - 1, active + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); mark(Math.max(0, active - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); choose(active); }
+  });
+  scrim.addEventListener("click", closePalette);
+  $("open-search").addEventListener("click", () => openPalette());
+
+  document.addEventListener("keydown", (e) => {
+    const typing = e.target instanceof HTMLInputElement;
+    if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); openPalette(); }
+    else if (e.key === "Escape") { if (!palette.hidden) closePalette(); else if (selected) select(null); }
+    else if (!typing && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "f") fit(600);
+  });
+
+  addEventListener("resize", () => Graph.width(stage.clientWidth).height(stage.clientHeight));
+
+  // Labels never sit on each other: a few times a second, keep the most important label in each spot
+  // (the hovered or selected concept, then its neighbours, then by degree) and hide the ones it covers.
+  const priority = (n) => (n === (hovered || selected) ? 1e6 : 0) + (focusSet && focusSet.has(n.id) ? 1e4 : 0) + degree(n);
+  setInterval(() => {
+    const shown = DATA.nodes.filter((n) => n.__parts && !n.__parts.label.classList.contains("dim") && !hiddenTypes.has(n.type))
+      .sort((a, b) => priority(b) - priority(a));
+    const kept = [];
+    for (const n of shown) {
+      const r = n.__parts.label.getBoundingClientRect();
+      const clash = r.width > 0 && kept.some((k) => r.left < k.right + 4 && r.right > k.left - 4 && r.top < k.bottom + 2 && r.bottom > k.top - 2);
+      n.__parts.label.classList.toggle("clash", clash);
+      if (!clash && r.width > 0) kept.push(r);
+    }
+  }, 120);
+  paint();
+  requestAnimationFrame(() => fit(0));        // settled by the warm-up ticks; no entrance animation
+  window.__kg = { Graph, select, fit, byId };  // handle for debugging and screenshots
+  // Deep links: #select=<name> opens a concept, #search=<term> opens the palette with a term.
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get("select") && byId.has(hash.get("select"))) setTimeout(() => select(byId.get(hash.get("select"))), 50);
+  else if (hash.has("search")) openPalette(hash.get("search"));
+}
+</script>
+</body>
+</html>

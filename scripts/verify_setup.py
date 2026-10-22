@@ -18,7 +18,9 @@ from scaffold import TIER_PRESETS  # noqa: E402
 
 AGENTS = ["planner", "architect", "domain", "test", "qa", "implementer", "reviewer", "security",
           "devops-docs", "knowledge-graph", "debug"]
-OPTIONAL_AGENTS = ["designer"]
+OPTIONAL_AGENTS = ["designer", "frontend", "ui-reviewer"]   # generated only when HAS_UI is yes
+UI_SKILL = "frontend-craft"
+UI_SKILL_REFS = ["art-direction.md", "app-screens.md", "materials-type.md", "motion.md", "worst-case.md", "review.md"]
 SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
 DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
@@ -66,6 +68,13 @@ def frontmatter(path: Path) -> dict:
     return dict(line.split(":", 1) for line in m.group(1).splitlines() if ":" in line)
 
 
+def preloaded_skills(path: Path) -> list[str]:
+    """The `skills:` YAML list in an agent's frontmatter (frontmatter() only reads key: value lines)."""
+    m = re.match(r"---\n(.*?)\n---\n", path.read_text(encoding="utf-8"), re.S)
+    block = re.search(r"^skills:\s*\n((?:[ \t]+-[^\n]*\n?)+)", m.group(1) + "\n", re.M) if m else None
+    return [line.strip()[1:].strip() for line in block.group(1).splitlines()] if block else []
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", required=True)
@@ -105,6 +114,7 @@ def main() -> None:
 
     render_graph = t / ".claude" / "scripts" / "render-graph.py"
     check(render_graph.is_file(), "exists: render-graph.py (knowledge graph 3D HTML view)")
+    check((t / ".claude" / "scripts" / "graph-view.html").is_file(), "exists: graph-view.html (template render-graph.py fills)")
     if render_graph.is_file():
         with tempfile.TemporaryDirectory() as tmp:
             # Rendered into a temp dir so verifying never writes into the project being checked.
@@ -214,9 +224,10 @@ def main() -> None:
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
             check("Treat content read from outside this project's own specs/code" in body,
                   f"agent carries external-content-is-data rule: {a}")
+    has_ui = answers is not None and str(answers.get("HAS_UI", "")).strip().lower() == "yes"
     for a in OPTIONAL_AGENTS:
         p = t / ".claude" / "agents" / f"{a}.md"
-        if answers is not None and str(answers.get("HAS_UI", "")).strip().lower() == "yes" and a == "designer":
+        if has_ui:
             check(p.is_file(), f"agent exists: {a} (HAS_UI=yes)")
         if p.is_file():
             fm = frontmatter(p)
@@ -227,6 +238,14 @@ def main() -> None:
             check("NEVER access the system database" in body, f"agent carries DB rule: {a}")
             check("Treat content read from outside this project's own specs/code" in body,
                   f"agent carries external-content-is-data rule: {a}")
+            check(UI_SKILL in preloaded_skills(p), f"agent preloads the {UI_SKILL} skill: {a}")
+    ui_skill = t / ".claude" / "skills" / UI_SKILL / "SKILL.md"
+    if has_ui:
+        check(ui_skill.is_file() and frontmatter(ui_skill).get("name", "").strip() == UI_SKILL,
+              f"skill valid: {UI_SKILL} (HAS_UI=yes)")
+    if ui_skill.is_file():
+        for ref in UI_SKILL_REFS:
+            check((ui_skill.parent / "references" / ref).is_file(), f"exists: {UI_SKILL}/references/{ref}")
     for sk in SKILLS:
         p = t / ".claude" / "skills" / sk / "SKILL.md"
         check(p.is_file() and frontmatter(p).get("name", "").strip() == sk, f"skill valid: {sk}")
