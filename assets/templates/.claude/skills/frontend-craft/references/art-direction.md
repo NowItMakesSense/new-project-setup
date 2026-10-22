@@ -24,7 +24,7 @@ For pages that are read and scrolled. App screens follow `app-screens.md` instea
 | No index numbering (01 / 02 / 03, "Step 2") | Order by position, size or words; a real `<ol>` if order matters |
 | No hairline dividers, outlined boxes, grid lines or crop marks | Space, a tone step, a change of scale, a filled shape |
 | No gradients (backgrounds, buttons, text) | Flat colour or a real photograph; a neutral scrim under text on a photo is the one exception |
-| No shadows on things at rest, no glows, no glass | A tone step; shadows only on menus and dialogs |
+| No shadows on things at rest, no glows, no ad-hoc glass | A tone step; shadows only on menus and dialogs; the glass material (`materials-type.md`) only for chrome floating over live content |
 | No violet/indigo accents, no cream-with-terracotta "assistant palette" | The direction's palette, checked against the subject's own colours |
 | No icon-topped feature cards in identical rows | The direction's section compositions |
 | No emoji, gradient blobs, decorative shapes or fake dashboards of grey bars | A real picture, a real interface fragment, or nothing |

@@ -524,6 +524,38 @@ class ScaffoldTests(unittest.TestCase):
         p = subprocess.run(["node", "-e", js], capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
+    def test_graph_view_uses_one_glass_material_with_fallbacks(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        template = (self.target / ".claude" / "scripts" / "graph-view.html").read_text(encoding="utf-8")
+        style = template.split("<style>")[1].split("</style>")[0]
+        for weight in (".glass-thin", ".glass-thick", "--glass-regular"):
+            self.assertIn(weight, style, weight)
+        self.assertIn("@media (prefers-reduced-transparency: reduce)", style)
+        self.assertIn("@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))", style)
+        # Safari needs the prefixed twin of every backdrop-filter declaration.
+        # Declarations only - the @supports condition also spells the property, inside parentheses.
+        plain = re.findall(r"(?<![-\w(])backdrop-filter:\s*([^;]+);", style)
+        prefixed = re.findall(r"(?<!\()-webkit-backdrop-filter:\s*([^;]+);", style)
+        self.assertTrue(plain)
+        self.assertEqual(sorted(plain), sorted(prefixed))
+        # Scrollable panes never fall back to the native scrollbar that broke the layout.
+        self.assertIn(".scroll::-webkit-scrollbar-thumb", style)
+        self.assertIn("scrollbar-gutter: stable", style)
+        self.assertIn('class="legend-rows scroll"', template)
+        self.assertNotIn("transition: all", style)
+        self.assertNotRegex(style, r"transition:[^;]*backdrop-filter")
+
+    def test_frontend_craft_documents_the_glass_material(self):
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        craft = self.target / ".claude" / "skills" / "frontend-craft"
+        materials = (craft / "references" / "materials-type.md").read_text(encoding="utf-8")
+        self.assertIn("## Glass material", materials)
+        for token in ("`thin`", "`regular`", "`thick`", "prefers-reduced-transparency", "scrollbar-gutter: stable"):
+            self.assertIn(token, materials, token)
+        self.assertIn("--allow glass", (craft / "SKILL.md").read_text(encoding="utf-8"))
+
     def test_render_graph_uses_title_and_writes_empty_page(self):
         r = run_scaffold(self.target, base_answers())
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

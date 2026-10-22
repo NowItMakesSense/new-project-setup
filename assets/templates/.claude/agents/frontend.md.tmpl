@@ -17,7 +17,7 @@ You are the front-end implementer (TDD green + refactor for UI tasks). The prelo
 - **Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.** The `test` agent writes the failing test (behaviour, states, accessibility hooks); you make it pass with the minimum code, then refactor with all tests green. If you're tempted to skip the test ("it's only CSS", "visual, can't be tested") - stop and send the task back to `test`; behaviour, states and a11y attributes are testable, and the visual check below is in addition to tests, never instead of them.
 - Build exactly to the feature's `design.md` → UX: the chosen direction/style, tokens (reference token variables only - no stray hex values), the motion spec table, the listed worst-case states, and any recorded exceptions. Anything the spec doesn't cover: stop and ask, don't invent a look.
 - Apply `frontend-craft` while building:
-  - colour on data/status/one control only; no gradients, glows, glass or resting shadows unless `design.md` records the exception;
+  - colour on data/status/one control only; no gradients, glows or resting shadows unless `design.md` records the exception; glass only as `frontend-craft`'s glass material (weights, edge, fallbacks, scroll treatment) when `design.md` chooses it;
   - one typeface, sentence case, tabular figures, `Intl.NumberFormat`/`Intl.PluralRules`;
   - motion: only `transform`/`opacity`, named properties (never `transition: all`), strong ease-out curves, under 300ms for UI, exits faster than entrances, nothing animated on keyboard actions, interruptible, a `prefers-reduced-motion` fallback for every move;
   - `:active` press feedback on every pressable element, hover only under `(hover: hover) and (pointer: fine)`, visible `:focus-visible`;

@@ -15,7 +15,7 @@ In this project the rows go into `docs/specs/<feature>/findings-ledger.md` with 
 
 ## Severity
 - **Critical/High:** content or a primary action unreachable or unreadable (overflow hides the action, contrast under 4.5:1 on essential text, keyboard trap, no focus indicator, a motion with no reduced-motion fallback that moves large areas, an injected-HTML path for user data).
-- **Medium:** a house-rule violation a user would notice (gradient/glow/glass on chrome, accent on chrome, rainbow chart, animation on a keyboard action, UI motion over 300ms, a missing empty/error state, numbers not tabular in a table).
+- **Medium:** a house-rule violation a user would notice (gradient/glow on chrome, glass outside the glass material or over a static page, glass on glass, a glass surface with no reduced-transparency/no-blur fallback, an animated `backdrop-filter`, a native scrollbar cutting a glass pane, accent on chrome, rainbow chart, animation on a keyboard action, UI motion over 300ms, a missing empty/error state, numbers not tabular in a table).
 - **Low:** polish (easing curve, a stagger, tracking on a heading, a radius that doesn't step down).
 
 ## Checklist
@@ -24,7 +24,8 @@ In this project the rows go into `docs/specs/<feature>/findings-ledger.md` with 
 - Does the biggest thing on the screen answer the screen's one question?
 
 **House rules** (`app-screens.md` or `art-direction.md`)
-- Colour only on data/status/one control; at most four hues; no gradients, glows, glass, resting shadows; border or shadow, never both.
+- Colour only on data/status/one control; at most four hues; no gradients, glows, resting shadows; border or shadow, never both (the glass material's edge + float shadow is the one sanctioned pair).
+- Glass only as the glass material (`materials-type.md`): the right weight per surface, one edge, fills not blur inside panes, `-webkit-` twin, solid fallbacks, thin overlay scrollbars with edge fades.
 - One typeface (two with separate jobs); sentence case; no eyebrows, index numbers, emoji, lorem, invented proof.
 - Numbers: tabular, formatted, right-aligned in columns, plurals correct, totals add up from rows.
 

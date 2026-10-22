@@ -45,7 +45,7 @@ App screens have no motion floor. Motion is feedback: press, hover, focus, a men
 | Banned | Instead |
 | --- | --- |
 | Gradients on grounds, buttons, cards, text, KPI tiles | Flat fills (an area fade under one line chart is the one exception) |
-| Glows, glass, backdrop blur | Opaque surfaces one tone step from the ground |
+| Glows; glass cards, ad-hoc backdrop blur | Opaque surfaces one tone step from the ground - or, for chrome floating over live content (canvas, map, 3D), the glass material in `materials-type.md` when `design.md` chooses it |
 | An icon in a coloured circle on every KPI or card | A label and a number |
 | Rainbow charts, a hue per bar, one subject in two hues | One hue per chart, neutrals for the rest, four hues at most per screen |
 | A dark or saturated sidebar on a light screen; a navy/slate dark theme | The page ground for the sidebar; true neutral darks |
