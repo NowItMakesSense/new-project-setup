@@ -14,7 +14,13 @@ Scope: only entities/tables/screens touched by *this* feature - never the whole 
 - If this feature touches the database: list of affected `Database/` objects (new or modified tables/indexes/foreign-keys/primary-keys/packages/functions), linked into `Database/`.
 
 ## UX (if this feature has a UI)
-Information architecture, user flows/wireframes (text/Mermaid), design-system tokens/components used, accessibility (WCAG) criteria. Owned by `designer`; omit this section for UI-less features.
+Information architecture, user flows/wireframes (text/Mermaid), design-system tokens/components used, accessibility (WCAG) criteria. Owned by `designer` (rules: `.claude/skills/frontend-craft/`); omit this section for UI-less features. Also record, per screen:
+- **Kind and question:** page or app screen; the one question it answers first.
+- **Direction / style:** name (and `draw.mjs` seed if dealt), why it suits this subject, and **the face** (the one thing only this product has).
+- **Tokens:** type scale, colour roles, spacing, radii (or a link to `docs/design-system.md`).
+- **Motion spec:** | Element | Trigger | Property | Easing | Duration | Reduced motion |
+- **Worst-case states:** empty, one, huge, long, missing, loading, error - what each shows.
+- **Exceptions:** any deliberate break of the house rules, with its reason.
 
 ## Architecture
 Layer map (domain / application / infrastructure / interface), ports and adapters, dependency direction (inward).

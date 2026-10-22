@@ -29,18 +29,26 @@ TIER_PRESETS = {
         "PLANNER": "sonnet", "ARCHITECT": "sonnet", "DOMAIN": "sonnet", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "sonnet", "SECURITY": "sonnet",
         "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "sonnet",
+        "FRONTEND": "sonnet", "UI_REVIEWER": "sonnet",
     },
     "balanced": {
         "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "sonnet", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
         "DEVOPS_DOCS": "haiku", "KNOWLEDGE_GRAPH": "sonnet", "DESIGNER": "sonnet", "DEBUG": "opus",
+        "FRONTEND": "sonnet", "UI_REVIEWER": "opus",
     },
     "quality": {
         "PLANNER": "sonnet", "ARCHITECT": "opus", "DOMAIN": "opus", "TEST": "sonnet",
         "IMPLEMENTER": "sonnet", "QA": "sonnet", "REVIEWER": "opus", "SECURITY": "opus",
         "DEVOPS_DOCS": "sonnet", "KNOWLEDGE_GRAPH": "opus", "DESIGNER": "sonnet", "DEBUG": "opus",
+        "FRONTEND": "opus", "UI_REVIEWER": "opus",
     },
 }
+# Generated only when HAS_UI is yes: the front-end team and the house rules they share.
+UI_ONLY_FILES = {
+    ".claude/agents/designer.md.tmpl", ".claude/agents/frontend.md.tmpl", ".claude/agents/ui-reviewer.md.tmpl",
+}
+UI_ONLY_PREFIX = ".claude/skills/frontend-craft/"
 TEMPLATES = Path(__file__).resolve().parent.parent / "assets" / "templates"
 VAR = re.compile(r"\{\{([A-Z_]+)\}\}")
 
@@ -72,21 +80,18 @@ def load_answers(path: Path) -> dict:
     if node_available:
         if not re.fullmatch(r"[A-Za-z0-9_./-]+", npx_cmd):
             sys.exit("NPX_CMD must be a plain command name such as npx, or 'none'")
-        values["MCP_SERVERS_BLOCK"] = (
-            ",\n  \"mcpServers\": {\n"
-            "    \"knowledge-graph\": {\n"
-            f"      \"command\": {json.dumps(npx_cmd)},\n"
-            "      \"args\": [\"-y\", \"@modelcontextprotocol/server-memory\"],\n"
-            "      \"env\": {\n"
-            "        \"MEMORY_FILE_PATH\": \"$CLAUDE_PROJECT_DIR/docs/knowledge-graph/graph.jsonl\"\n"
-            "      }\n"
-            "    }\n"
-            "  }"
-        )
         values["KG_MCP_TOOLS"] = "".join(f", mcp__knowledge-graph__{t}" for t in KG_MCP_TOOLS)
+        # Pre-approves the .mcp.json server so the knowledge-graph agent isn't blocked by the
+        # per-server trust prompt. Each user must still trust the folder itself on first run -
+        # this key is ignored in an untrusted folder.
+        values["MCP_ENABLED_BLOCK"] = '"enabledMcpjsonServers": ["knowledge-graph"],\n  '
     else:
-        values["MCP_SERVERS_BLOCK"] = ""
         values["KG_MCP_TOOLS"] = ""
+        values["MCP_ENABLED_BLOCK"] = ""
+    # The server DEFINITION lives in `.mcp.json` at the repo root, NOT in `.claude/settings.json`:
+    # Claude Code reads project-scoped server definitions only from `.mcp.json`. Only the
+    # enable/disable toggle lists belong in settings.json.
+    values["_HAS_MCP"] = "yes" if node_available else "no"
     return values
 
 
@@ -98,9 +103,24 @@ def render(text: str, values: dict, name: str) -> str:
     return VAR.sub(sub, text)
 
 
+def merge_mcp_json(old: dict, new: dict) -> dict:
+    """Key-level merge of .mcp.json: add server definitions `old` doesn't already have,
+    never overwrite or remove a server the project already declares."""
+    merged = dict(old)
+    merged_servers = dict(old.get("mcpServers", {}))
+    for key, value in new.get("mcpServers", {}).items():
+        merged_servers.setdefault(key, value)
+    merged["mcpServers"] = merged_servers
+    return merged
+
+
 def merge_settings(old: dict, new: dict) -> dict:
-    """Key-level merge of .claude/settings.json: union deny rules, add new hook/mcpServers
-    entries, never touch or remove anything already in `old` that `new` doesn't mention."""
+    """Key-level merge of .claude/settings.json: union deny rules, add new hook entries,
+    never touch or remove anything already in `old` that `new` doesn't mention.
+
+    Note: MCP servers are NOT merged here. They belong in `.mcp.json` (see merge_mcp_json);
+    a legacy `mcpServers` block left in settings.json by an older version of this skill is
+    dead config - it is preserved untouched rather than extended."""
     merged = dict(old)
 
     old_deny = old.get("permissions", {}).get("deny", [])
@@ -123,14 +143,6 @@ def merge_settings(old: dict, new: dict) -> dict:
         merged["hooks"] = dict(old.get("hooks", {}))
         merged["hooks"]["PreToolUse"] = merged_hooks
 
-    old_mcp = old.get("mcpServers", {})
-    new_mcp = new.get("mcpServers", {})
-    if old_mcp or new_mcp:
-        merged_mcp = dict(old_mcp)
-        for key, value in new_mcp.items():
-            merged_mcp.setdefault(key, value)
-        merged["mcpServers"] = merged_mcp
-
     return merged
 
 
@@ -141,21 +153,32 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--merge-settings", action="store_true",
-                     help="For .claude/settings.json only: merge new deny rules/hooks/mcpServers "
-                          "into the existing file by key instead of skipping or fully overwriting it.")
+                     help="For .claude/settings.json and .mcp.json only: merge new deny rules/hooks "
+                          "(settings.json) and new MCP servers (.mcp.json) into the existing file by "
+                          "key instead of skipping or fully overwriting it.")
     a = ap.parse_args()
 
     values = load_answers(Path(a.answers))
     target = Path(a.target).resolve()
+    # MEMORY_FILE_PATH must be ABSOLUTE: @modelcontextprotocol/server-memory resolves a relative
+    # path against its own module directory (inside the npx cache), not the project - a relative
+    # path makes writes fail with ENOENT on a lock file under the package's dist/. And it cannot
+    # be expressed portably: Claude Code substitutes $CLAUDE_PROJECT_DIR into hook *commands*, but
+    # does not export it into an MCP server's environment, so `${CLAUDE_PROJECT_DIR}` there expands
+    # to nothing. Hence the concrete path, resolved at scaffold time. See docs/knowledge-graph/README.md.
+    values["MCP_MEMORY_PATH"] = (target / "docs" / "knowledge-graph" / "graph.jsonl").as_posix()
     created, skipped, merged_files = [], [], []
 
     for src in sorted(p for p in TEMPLATES.rglob("*") if p.is_file()):
         rel = src.relative_to(TEMPLATES)
         if rel.as_posix().startswith(".github/") and values["_CI"] != "github-actions":
             continue
-        if rel.as_posix() == ".claude/agents/designer.md.tmpl" and values["_HAS_UI"] != "yes":
-            continue
+        if rel.as_posix() in UI_ONLY_FILES or rel.as_posix().startswith(UI_ONLY_PREFIX):
+            if values["_HAS_UI"] != "yes":
+                continue
         if rel.as_posix().startswith("Database/") and values["_HAS_DB"] != "yes":
+            continue
+        if rel.as_posix() == ".mcp.json.tmpl" and values["_HAS_MCP"] != "yes":
             continue
         is_tmpl = src.suffix == ".tmpl"
         dest = target / (rel.with_suffix("") if is_tmpl else rel)
@@ -164,10 +187,15 @@ def main() -> None:
             text = render(text, values, rel.as_posix())
 
         if dest.exists():
-            if a.merge_settings and rel.as_posix() == ".claude/settings.json.tmpl":
+            mergers = {
+                ".claude/settings.json.tmpl": merge_settings,
+                ".mcp.json.tmpl": merge_mcp_json,
+            }
+            merger = mergers.get(rel.as_posix())
+            if a.merge_settings and merger is not None:
                 old = json.loads(dest.read_text(encoding="utf-8"))
                 new = json.loads(text)
-                merged = merge_settings(old, new)
+                merged = merger(old, new)
                 if not a.dry_run:
                     dest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8", newline="\n")
                 merged_files.append(dest)

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scaffold import TIER_PRESETS  # noqa: E402
 
 AGENT_ROLES = ["planner", "architect", "domain", "test", "qa", "implementer", "reviewer",
-               "security", "devops-docs", "knowledge-graph", "debug", "designer"]
+               "security", "devops-docs", "knowledge-graph", "debug", "designer", "frontend", "ui-reviewer"]
 
 
 def retune_models(target: Path, priority: str, dry_run: bool) -> list[str]:

@@ -8,8 +8,8 @@ Phases run in order. Each ends with a **human gate**: the orchestrator summarize
 | 2 | Specs | `planner` + `spec-writer` | `docs/specs/<feature>/requirements.md` | User approves requirements |
 | 3 | Architecture & Domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md` (incl. feature diagram), ADRs, glossary, threat model, updated knowledge graph, `Database/` update + `overview.html` (if the feature touches UI/DB) | User approves design |
 | 4 | Task breakdown | `planner` | `tasks.md` (TDD-sized tasks) | User approves tasks |
-| 5 | TDD loop (per task) | `test` -> `implementer` -> refactor; `debug` if one pass of the protocol doesn't resolve it | Red, green, refactor commits | Tests green |
-| 6 | Review & QA | `reviewer`, `qa` | Findings logged in `findings-ledger.md`; integration/e2e/edge-case test results; coverage % | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets `COVERAGE_THRESHOLD` |
+| 5 | TDD loop (per task) | `test` -> the task's owner (`implementer`, or `frontend` for `Owner: frontend`) -> refactor; `debug` if one pass of the protocol doesn't resolve it | Red, green, refactor commits | Tests green |
+| 6 | Review & QA | `reviewer`, `qa`, `ui-reviewer` (when a task has `Owner: frontend`) | Findings logged in `findings-ledger.md`; integration/e2e/edge-case test results; coverage % | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets `COVERAGE_THRESHOLD` |
 | 7 | Security | `security` | `security-report.md` (ASVS checklist); findings in the shared ledger | No `Open`/`Confirmed` Critical/High in the ledger |
 | 8 | CI/CD, docs, release | `devops-docs` | Pipeline, README, changelog | User confirms release |
 | - | Retro | orchestrator, after phase 8 | `docs/specs/<feature>/retro.md` | Carried-forward items applied before the next feature |
