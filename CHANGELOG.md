@@ -2,6 +2,16 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22
+
+**The knowledge graph now has an interactive 3D view.** New `.claude/scripts/render-graph.py`, generated into every project, turns the graph into `docs/knowledge-graph/graph.html`: entities as spheres coloured by `entityType` and sized by degree, relations as labelled directional arrows, a search box, a clickable legend that hides a type, and a side panel listing the selected entity's observations and its incoming/outgoing relations (click a neighbour to jump to it).
+
+- Reads `graph.jsonl` (the MCP memory server's format) or, in fallback mode, the "Entities"/"Relations" tables of `graph.md`, so both setups get the same view. Standard library only, like the other generated scripts.
+- Self-contained except for the rendering library: the data is embedded inline (with `</` escaped so an observation can't close the script block), and `3d-force-graph` loads from a pinned unpkg URL - viewing needs network access.
+- Relation endpoints with no declared entity are drawn grey as `undeclared` and reported with a `WARN` line, so a missing `create_entities` call is visible instead of silently dropped.
+- `knowledge-graph` re-runs the script after every graph change (its `tools:` gained `Bash` for this; the DB-guard hook still covers every Bash call). `verify_setup.py` checks the script exists and renders the fresh scaffold (into a temp dir, never into the project); `test_scaffold.py` gained 3 tests (JSONL input incl. the script-injection case and the undeclared warning, markdown fallback, agent wiring).
+- Not verified: an actual browser render. The page's inline JS passes `node --check`, but it was not opened in a browser during this change.
+
 ## 2026-10-21 (7)
 
 **Bug fix: the knowledge-graph MCP server was written to a file Claude Code never reads.** Found while bootstrapping a real project (Deckloom): the `knowledge-graph` agent fell back to markdown, and the previous "unverified" note in README's known-limits turned out to be hiding an actual defect, not just an unknown.

@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -101,6 +102,16 @@ def main() -> None:
         r = subprocess.run([sys.executable, str(traceability), "--specs-dir", str(t / "docs" / "specs")],
                             capture_output=True, text=True)
         check(r.returncode == 0, "check-traceability.py runs cleanly against the fresh scaffold (no features yet)")
+
+    render_graph = t / ".claude" / "scripts" / "render-graph.py"
+    check(render_graph.is_file(), "exists: render-graph.py (knowledge graph 3D HTML view)")
+    if render_graph.is_file():
+        with tempfile.TemporaryDirectory() as tmp:
+            # Rendered into a temp dir so verifying never writes into the project being checked.
+            r = subprocess.run([sys.executable, str(render_graph), "--graph-dir", str(t / "docs" / "knowledge-graph"),
+                                "--out", str(Path(tmp) / "graph.html")], capture_output=True, text=True)
+            check(r.returncode == 0 and (Path(tmp) / "graph.html").is_file(),
+                  "render-graph.py renders the fresh scaffold's knowledge graph to HTML")
 
     sp = t / ".claude" / "settings.json"
     check(sp.is_file(), "exists: .claude/settings.json")

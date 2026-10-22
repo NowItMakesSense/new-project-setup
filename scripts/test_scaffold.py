@@ -397,6 +397,54 @@ class ScaffoldTests(unittest.TestCase):
                             capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
+    def test_render_graph_builds_3d_html_from_jsonl(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        kg_dir = self.target / "docs" / "knowledge-graph"
+        lines = [
+            {"type": "entity", "name": "Order", "entityType": "Aggregate",
+             "observations": ["defined in discovery.md", "note </script><b>x</b>"]},
+            {"type": "entity", "name": "Money", "entityType": "ValueObject", "observations": []},
+            {"type": "relation", "from": "Order", "to": "Money", "relationType": "priced in"},
+            {"type": "relation", "from": "Order", "to": "Customer", "relationType": "placed by"},
+        ]
+        (kg_dir / "graph.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+        script = self.target / ".claude" / "scripts" / "render-graph.py"
+        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("3 entities, 2 relations", p.stdout)
+        self.assertIn("WARN", p.stdout)  # Customer is a relation endpoint with no declared entity
+        page = (kg_dir / "graph.html").read_text(encoding="utf-8")
+        self.assertIn("3d-force-graph@", page)
+        self.assertIn('"priced in"', page)
+        # An observation containing </script> must not be able to close the inline data block.
+        self.assertEqual(page.count("</script>"), 2)
+
+    def test_render_graph_reads_markdown_fallback(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        kg_dir = self.target / "docs" / "knowledge-graph"
+        (kg_dir / "graph.md").write_text(
+            "# Knowledge graph\n\n## Entities\n| Name | Type | Observations |\n|---|---|---|\n"
+            "| Order | Aggregate | a; b |\n| Line | Entity | |\n\n"
+            "## Relations\n| From | Relation | To |\n|---|---|---|\n| Order | contains | Line |\n",
+            encoding="utf-8",
+        )
+        script = self.target / ".claude" / "scripts" / "render-graph.py"
+        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("2 entities, 1 relations", p.stdout)
+        self.assertNotIn("WARN", p.stdout)
+        self.assertIn('"contains"', (kg_dir / "graph.html").read_text(encoding="utf-8"))
+
+    def test_knowledge_graph_agent_regenerates_html(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
+        tools_line = next(line for line in agent.splitlines() if line.startswith("tools:"))
+        self.assertIn("Bash", tools_line)
+        self.assertIn("python .claude/scripts/render-graph.py", agent)
+
     def test_agents_carry_external_content_rule(self):
         r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

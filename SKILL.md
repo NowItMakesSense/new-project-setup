@@ -59,6 +59,7 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/hooks/block-db-access.py` + `db_patterns.json` | Hard block of DB CLIs, DB URLs, secrets; rules in the sibling JSON, fails closed if it's missing/invalid |
 | `.claude/hooks/verify-guard.py` | CI guard-rail check: re-runs the deny-rule/hook checks on every push/PR, wired into `ci.yml` |
 | `.claude/scripts/check-traceability.py` | Verifies REQ-ID linkage between `requirements.md`/`tasks.md` (run by `qa` before phase 6, wired into `ci.yml`) |
+| `.claude/scripts/render-graph.py` | Renders the knowledge graph (`graph.jsonl`, or `graph.md` in fallback) to an interactive 3D `docs/knowledge-graph/graph.html`; re-run by `knowledge-graph` after every graph change |
 | `.claude/agents/*.md` | planner, architect, domain, test, qa, implementer, reviewer, security, devops-docs, knowledge-graph, debug, and designer (only when `HAS_UI` is yes); each has a role-tiered default model (opus/sonnet/haiku) set by `MODEL_PRIORITY`, overridable per project |
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
@@ -66,7 +67,7 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults deliberately, with an ADR - never the DB-access directive |
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
-| `docs/knowledge-graph/` | Domain model as a graph (MCP-backed when `NPX_CMD` is set; markdown fallback otherwise) |
+| `docs/knowledge-graph/` | Domain model as a graph (MCP-backed when `NPX_CMD` is set; markdown fallback otherwise), plus its generated 3D view `graph.html` |
 | `Database/` (only when `DB_ENGINE` indicates a database) | Complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature, never a live connection or real data |
 | `docs/specs/<feature>/overview.html` (conditional) | Self-contained static HTML/SVG, no external dependency, produced per feature when it touches UI screens and/or the database - affected screens, feature-scoped ER diagram, affected `Database/` objects |
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
