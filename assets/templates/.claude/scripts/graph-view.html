@@ -161,7 +161,7 @@
   /* ---------- types menu ---------- */
   .legend {
     position: fixed; z-index: 2; left: var(--edge-gap); bottom: calc(var(--edge-gap) + env(safe-area-inset-bottom, 0px));
-    width: 248px; max-height: calc(100dvh - var(--top) - 48px - 24px - var(--edge-gap));
+    width: 248px; max-height: calc(100dvh - var(--top) - 48px - 3 * var(--edge-gap) - 52px);
     display: flex; flex-direction: column; border-radius: var(--radius-pane); padding: 6px;
   }
   .pane-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px 0 12px; flex-shrink: 0; }
@@ -172,7 +172,7 @@
     border: 0; background: transparent; padding: 4px 8px; margin-right: -6px; border-radius: 8px;
     color: var(--muted); font-size: 12px; font-weight: 600; transition: transform 160ms var(--ease-out), background-color 160ms ease;
   }
-  .legend-rows { padding: 2px 0 2px; min-height: 0; }
+  .legend-rows { padding: 2px 0 2px; min-height: 0; max-height: 200px; }   /* ~5.5 rows: the half row shows it scrolls */
   .legend-rows button {
     width: 100%; height: 36px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent;
     display: flex; align-items: center; gap: 10px; text-align: left;
@@ -188,14 +188,18 @@
 
   /* ---------- toolbar ---------- */
   .tools {
-    position: fixed; z-index: 2; right: var(--edge-gap); bottom: calc(var(--edge-gap) + env(safe-area-inset-bottom, 0px));
-    display: flex; gap: 2px; padding: 4px; border-radius: 999px;
+    position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); bottom: calc(var(--edge-gap) + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 2px; padding: 4px; border-radius: 999px; white-space: nowrap;
   }
   .tool {
-    height: var(--control-height); padding: 0 16px; border: 0; border-radius: var(--radius-control);
+    display: inline-flex; align-items: center; gap: 8px;
+    height: var(--control-height); padding: 0 16px 0 13px; border: 0; border-radius: var(--radius-control);
     background: transparent; color: var(--text); font-weight: 500;
     transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease;
   }
+  .tool svg { flex-shrink: 0; }
+  .tool kbd { margin-left: 2px; min-width: 20px; height: 20px; font-size: 11px; }
+  .tool[aria-pressed="true"] kbd { color: #3a3a3a; background: rgba(0, 0, 0, 0.08); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
   .tool[aria-pressed="true"] { background: var(--text); color: #000; }   /* primary by inversion */
 
   /* ---------- detail sheet: in from the right, out the same way, faster ---------- */
@@ -301,6 +305,9 @@
   .legend-rows button:active, .tool:active, .hop:active, .close:active, .search:active, .pill-warning:active, .link:active { transform: scale(0.97); }
 
   @media (max-width: 860px) { .question, .brand .sep { display: none; } .search { width: 240px; } }
+  /* Narrow screens: the legend lifts above the centred toolbar instead of sliding under it. */
+  @media (max-width: 1100px) { .legend { bottom: calc(2 * var(--edge-gap) + 48px + env(safe-area-inset-bottom, 0px)); } }
+  @media (max-width: 480px) { .tool span { display: none; } .tool { padding: 0 13px; } }
   @media (max-width: 720px) {
     :root { --edge-gap: 10px; }
     .search .ph, .search .keys { display: none; }
@@ -309,8 +316,7 @@
     .sheet { top: auto; left: var(--edge-gap); right: var(--edge-gap); width: auto; max-height: 55dvh;
       bottom: calc(var(--edge-gap) + 48px + var(--edge-gap) + env(safe-area-inset-bottom, 0px));
       transform: translateY(calc(100% + 80px)); }
-    .tools { right: auto; left: 50%; transform: translateX(-50%); }
-    .tools:active { transform: translateX(-50%); }
+    .tool kbd { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .sheet, .sheet.open { transform: none; transition: opacity 160ms ease, visibility 0s linear 160ms; }
@@ -362,9 +368,18 @@
 </nav>
 
 <div class="tools glass" id="tools" role="toolbar" aria-label="View" hidden>
-  <button class="tool" id="t-labels" aria-pressed="true">Labels</button>
-  <button class="tool" id="t-rotate" aria-pressed="false">Rotate</button>
-  <button class="tool" id="t-fit" aria-keyshortcuts="F">Fit</button>
+  <button class="tool" id="t-labels" aria-keyshortcuts="L" title="Hide or show the names on the graph (L)">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h7l4 4.5-4 4.5h-7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path id="t-labels-off" d="M2 14 14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" hidden/></svg>
+    <span id="t-labels-text">Hide labels</span><kbd>L</kbd>
+  </button>
+  <button class="tool" id="t-rotate" aria-pressed="false" aria-keyshortcuts="R" title="Turn the graph slowly on its own (R)">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11.5 1v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Auto-rotate</span><kbd>R</kbd>
+  </button>
+  <button class="tool" id="t-fit" aria-keyshortcuts="C F" title="Center the whole graph in view (C)">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    <span>Center</span><kbd>C</kbd>
+  </button>
 </div>
 
 <aside class="sheet glass" id="sheet" aria-label="Concept details" inert>
@@ -818,13 +833,23 @@ async function boot() {
   watchFades($("results"));
 
   // ---------- toolbar ----------
+  // Labels is an action whose name says what it will do ("Hide labels" / "Show labels"), so it
+  // carries no pressed state; Auto-rotate is a real toggle. Rotation is opt-in, so it stays
+  // available with reduced motion - just slower.
   const tLabels = $("t-labels"), tRotate = $("t-rotate");
-  tLabels.addEventListener("click", () => { showLabels = !showLabels; tLabels.setAttribute("aria-pressed", String(showLabels)); paint(); });
-  tRotate.addEventListener("click", () => {
-    controls.autoRotate = !controls.autoRotate && !reduceMotion.matches;
+  const toggleLabels = () => {
+    showLabels = !showLabels;
+    $("t-labels-text").textContent = showLabels ? "Hide labels" : "Show labels";
+    $("t-labels-off").toggleAttribute("hidden", showLabels);   // SVG elements have no .hidden property
+    paint();
+  };
+  const toggleRotate = () => {
+    controls.autoRotate = !controls.autoRotate;
+    controls.autoRotateSpeed = reduceMotion.matches ? 0.2 : 0.5;
     tRotate.setAttribute("aria-pressed", String(controls.autoRotate));
-  });
-  if (reduceMotion.matches) tRotate.hidden = true;
+  };
+  tLabels.addEventListener("click", toggleLabels);
+  tRotate.addEventListener("click", toggleRotate);
   $("t-fit").addEventListener("click", () => fit(600));
   $("tools").hidden = false;
 
@@ -887,7 +912,12 @@ async function boot() {
     const typing = e.target instanceof HTMLInputElement;
     if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); openPalette(); }
     else if (e.key === "Escape") { if (!palette.hidden) closePalette(); else if (selected) select(null); }
-    else if (!typing && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "f") fit(600);
+    else if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "f" || k === "c") fit(600);
+      else if (k === "l") toggleLabels();
+      else if (k === "r") toggleRotate();
+    }
   });
 
   addEventListener("resize", () => { Graph.width(stage.clientWidth).height(stage.clientHeight); shift = sheetShift(); applyShift(); });

@@ -2,6 +2,24 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (5)
+
+**KG view: a compact Types menu and explicit view controls**, from reviewing the glass layout in the user's own browser.
+
+- **Types menu:** the row list now stops at about 5.5 rows (`max-height: 200px`) and scrolls inside the glass pane, and the half-visible row signals that there's more. Before, it grew to the window height and got cut off on short screens. Below 1100px it sits above the toolbar instead of beneath it.
+- **Toolbar:** now centred at the bottom, with an icon, an explicit name and a keycap on every control.
+  - **Hide labels / Show labels** (`L`): an action whose name says what it will do, with a struck icon once labels are off.
+  - **Auto-rotate** (`R`): a real toggle.
+  - **Center** (`C`, and `F` as before).
+  - On phones the keycaps drop, and below 480px only the icons remain.
+- **Auto-rotate under reduced motion:** the control stays available even with `prefers-reduced-motion` (for example, Windows animation effects off), just slower (0.2 instead of 0.5). Hiding it made the control look missing, and rotation only ever starts on an explicit click.
+- **Fix:** the labels-off icon toggles the SVG `hidden` attribute with `toggleAttribute`, because SVG elements have no `.hidden` property.
+- **Verified live in Chrome** (claude-in-chrome MCP), by mouse and with the L/R/C shortcuts:
+  - scrolling the Types menu to its last kind, including the top fade;
+  - Hide/Show labels, Auto-rotate on/off and Center;
+  - the 500px layout.
+- `inspect.mjs --app --allow glass` reports 0 FAIL / 0 WARN, and the CDP interaction script passes (its Labels and reduced-motion checks were updated for the new behaviour).
+
 ## 2026-10-22 (4)
 
 **The KG view goes glass, and glass becomes a standard material in `frontend-craft`.** Asked for: a better search field, a transparent Types menu whose scrollbar stopped breaking the layout, and a modern glass look applied consistently to every component.
