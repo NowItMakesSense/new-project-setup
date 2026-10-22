@@ -6,6 +6,7 @@ No third-party dependencies - stdlib unittest only, consistent with scaffold.py/
 """
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -501,6 +502,27 @@ class ScaffoldTests(unittest.TestCase):
             for package in re.findall(r"/((?:three|3d-force-graph|three-forcegraph|three-render-objects)@[^/?&,]+)", url):
                 self.assertRegex(package, r"@\d+\.\d+\.\d+$", (name, url))
         self.assertRegex(imports["3d-force-graph"], r"3d-force-graph@\d+\.\d+\.\d+")
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_graph_view_maps_qualified_kinds_to_ddd_hues(self):
+        # Agents record kinds with qualifiers ("Value Object (imutável)", "Entity (aggregate root)");
+        # these must still land on the DDD hues instead of falling through to neutral grey.
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        template = (self.target / ".claude" / "scripts" / "graph-view.html").read_text(encoding="utf-8")
+        src = template[template.index("const ALIASES"):template.index("const typeStyle")]
+        cases = {
+            "Aggregate": "aggregate", "AggregateRoot": "aggregate", "Entity (aggregate root)": "aggregate",
+            "Actor / Entity (aggregate root)": "aggregate", "Entity (catálogo)": "entity",
+            "Value Object (imutável)": "valueobject", "value_object": "valueobject",
+            "Bounded Context": "boundedcontext", "Domain Event (published)": "domainevent",
+            "Domain Service": "domainservice",
+        }
+        js = src + f"const cases = {json.dumps(cases)};\n" + (
+            "for (const [t, want] of Object.entries(cases)) { const got = kindKey(t);"
+            " if (got !== want) { console.log(`${t} -> ${got}, want ${want}`); process.exitCode = 1; } }")
+        p = subprocess.run(["node", "-e", js], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
     def test_render_graph_uses_title_and_writes_empty_page(self):
         r = run_scaffold(self.target, base_answers())

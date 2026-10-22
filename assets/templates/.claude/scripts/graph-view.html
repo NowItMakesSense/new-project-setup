@@ -315,7 +315,14 @@ const ALIASES = { aggregateroot: "aggregate", vo: "valueobject", value: "valueob
 const NEUTRALS = ["#8a8a8a", "#6b6b6b", "#a3a3a3", "#5c5c5c"];
 // "BoundedContext" / "value_object" -> "Bounded context" / "Value object": the project's word, set as a label.
 const humanize = (t) => { const s = String(t).replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
-const kindKey = (t) => { const k = String(t).toLowerCase().replace(/[\s_-]+/g, ""); return ALIASES[k] || k; };
+// Kinds often carry notes: "Entity (aggregate root)" is an aggregate; "Value Object (imutável)" and
+// "Actor / Entity" keep only the DDD kind, so qualifiers don't push a concept into neutral grey.
+const kindKey = (t) => {
+  const s = String(t).toLowerCase();
+  if (s.includes("aggregate")) return "aggregate";
+  const k = s.replace(/\(.*?\)/g, "").split("/").pop().replace(/[\s_-]+/g, "");
+  return ALIASES[k] || k;
+};
 const typeStyle = {};
 let neutralIx = 0;
 for (const t of [...new Set(DATA.nodes.map((n) => n.type))].sort()) {

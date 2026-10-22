@@ -2,6 +2,13 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (3)
+
+**Bug fix: the KG view greyed out kinds that carry a qualifier.** Found re-rendering Deckloom's graph: its agent records kinds like `Value Object (imutável)`, `Entity (aggregate root)` and `Actor / Entity (aggregate root)`, and `graph-view.html`'s `kindKey` only matched the bare word, so 13 of 16 concepts fell through to neutral grey and no aggregate got the accent hue.
+
+- `kindKey` now treats any kind mentioning "aggregate" as an aggregate, drops parenthetical notes, and keeps the part after the last `/`. Legend labels still show the project's own wording.
+- `test_scaffold.py` gained `test_graph_view_maps_qualified_kinds_to_ddd_hues`, which runs the template's own `kindKey` in Node (skipped when Node isn't installed). 57 tests pass.
+
 ## 2026-10-22 (2)
 
 **A front-end team for projects with a UI, and the knowledge-graph view rebuilt with it.** The first `graph.html` looked generic (stock spheres, floating boxes, hover-only labels), and the cause was general: nothing in a generated project carried design-engineering taste past the UX `designer`. Both are now built on two MIT-licensed skill collections - Emil Kowalski's skills (motion, polish, worst-case data, Apple's fluid-interface principles) and Leonxlnx's taste-skill (art direction, app-screen rules from measured product screens, a real-browser inspector).
