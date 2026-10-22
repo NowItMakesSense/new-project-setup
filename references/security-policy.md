@@ -26,7 +26,7 @@ A separate threat from the DB guard above: anything an agent reads that originat
 - Log without PII/secrets; document data retention per `COMPLIANCE` answer.
 
 ## Knowledge-graph MCP server (out of scope for the DB guard, by design)
-If configured (`NPX_CMD` wasn't `none` at setup), `.claude/settings.json` declares an `mcpServers.knowledge-graph` entry running `@modelcontextprotocol/server-memory`, used only by the `knowledge-graph` agent to persist the project's domain model (entities, value objects, aggregates, bounded contexts, relationships) to `docs/knowledge-graph/graph.jsonl`. This is local project-domain metadata: no credentials, no production data, no connection to the system database.
+If configured (`NPX_CMD` wasn't `none` at setup), `.mcp.json` at the repo root declares an `mcpServers.knowledge-graph` entry running `@modelcontextprotocol/server-memory`, used only by the `knowledge-graph` agent to persist the project's domain model (entities, value objects, aggregates, bounded contexts, relationships) to `docs/knowledge-graph/graph.jsonl`. This is local project-domain metadata: no credentials, no production data, no connection to the system database.
 The PreToolUse guard hook's matcher (`Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob`) does not cover MCP tool calls (named `mcp__<server>__<tool>`), so `mcp__knowledge-graph__*` calls are not intercepted by it - this is intentional, not a gap. Do not add a new MCP server that could reach the database or credentials without first extending the guard's matcher and threat model.
 
 ## Limits

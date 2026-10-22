@@ -114,22 +114,56 @@ def main() -> None:
             check(any("block-db-access.py" in h.get("command", "") for e in hooks for h in e.get("hooks", [])),
                   "PreToolUse hook registered")
 
-            mcp = s.get("mcpServers", {})
-            node_expected = answers is not None and str(answers.get("NPX_CMD", "")).strip().lower() not in ("none", "tbd", "")
+            if "mcpServers" in s:
+                print("WARN  .claude/settings.json contains an 'mcpServers' key - Claude Code does not read "
+                      "MCP server definitions from settings.json. This is dead config from an older version "
+                      "of this skill; the live definition belongs in .mcp.json (checked below). Safe to delete.")
+
+            # Pre-approval for the .mcp.json server. Without it, the server sits at
+            # "pending approval" and the knowledge-graph agent gets no MCP tools.
+            if answers is not None and str(answers.get("NPX_CMD", "")).strip().lower() not in ("none", "tbd", ""):
+                check("knowledge-graph" in s.get("enabledMcpjsonServers", []),
+                      "enabledMcpjsonServers pre-approves knowledge-graph (NPX_CMD set)")
+        except json.JSONDecodeError as e:
+            check(False, f"settings.json is valid JSON ({e})")
+
+    # Project-scoped MCP servers are declared in `.mcp.json` at the repo root - NOT in
+    # `.claude/settings.json`, which Claude Code ignores for this purpose.
+    mcp_path = t / ".mcp.json"
+    node_expected = answers is not None and str(answers.get("NPX_CMD", "")).strip().lower() not in ("none", "tbd", "")
+    if node_expected:
+        check(mcp_path.is_file(), "exists: .mcp.json (NPX_CMD set)")
+    if mcp_path.is_file():
+        try:
+            mcp = json.loads(mcp_path.read_text(encoding="utf-8")).get("mcpServers", {})
             if node_expected:
-                check("knowledge-graph" in mcp, "mcpServers.knowledge-graph declared (NPX_CMD set)")
+                check("knowledge-graph" in mcp, "mcpServers.knowledge-graph declared in .mcp.json (NPX_CMD set)")
             if "knowledge-graph" in mcp:
                 kg = mcp["knowledge-graph"]
+                memory_path = kg.get("env", {}).get("MEMORY_FILE_PATH", "")
                 well_formed = (
                     bool(kg.get("command"))
                     and kg.get("args") == ["-y", "@modelcontextprotocol/server-memory"]
-                    and kg.get("env", {}).get("MEMORY_FILE_PATH", "").endswith("docs/knowledge-graph/graph.jsonl")
+                    and memory_path.endswith("docs/knowledge-graph/graph.jsonl")
                 )
                 check(well_formed, "mcpServers.knowledge-graph well-formed")
+                # Must be absolute and literal. The memory server resolves a relative path against
+                # its own module dir in the npx cache (writes then fail with ENOENT), and Claude Code
+                # does not export $CLAUDE_PROJECT_DIR into an MCP server's environment, so any
+                # variable reference here expands to nothing.
+                looks_absolute = re.match(r"^([A-Za-z]:[/\\]|[/\\])", memory_path) is not None
+                check(looks_absolute and "$" not in memory_path,
+                      "MEMORY_FILE_PATH is an absolute literal path (no $VAR - Claude Code does not "
+                      "export CLAUDE_PROJECT_DIR to MCP servers, and relative paths break the server)")
+                if looks_absolute and not Path(memory_path).parent.exists():
+                    print(f"WARN  MEMORY_FILE_PATH points outside this project ({memory_path}) - if this "
+                          f"repo was cloned from another machine, update the absolute path in .mcp.json.")
             elif answers is None:
                 print("INFO  mcpServers.knowledge-graph not present (pass --answers to verify this was expected)")
         except json.JSONDecodeError as e:
-            check(False, f"settings.json is valid JSON ({e})")
+            check(False, f".mcp.json is valid JSON ({e})")
+    elif answers is None:
+        print("INFO  no .mcp.json (pass --answers to verify this was expected)")
 
     patterns_file = t / ".claude" / "hooks" / "db_patterns.json"
     check(patterns_file.is_file(), "exists: db_patterns.json (hook pattern definitions)")

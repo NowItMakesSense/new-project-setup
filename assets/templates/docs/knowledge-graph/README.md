@@ -3,9 +3,10 @@
 This project keeps a **domain knowledge graph** - entities, value objects, aggregates, bounded contexts and the relationships between them - separate from any application/business data.
 
 ## Where it lives
-- Backed by the MCP memory server (`@modelcontextprotocol/server-memory`), configured as `mcpServers.knowledge-graph` in `.claude/settings.json` (requires Node.js/`npx` - this is why).
+- Backed by the MCP memory server (`@modelcontextprotocol/server-memory`), configured as `mcpServers.knowledge-graph` in **`.mcp.json` at the repo root** (requires Node.js/`npx` - this is why). Project-scoped MCP servers go in `.mcp.json`, *not* in `.claude/settings.json` - Claude Code does not read server definitions from settings.json.
 - Storage file: `docs/knowledge-graph/graph.jsonl` (git-committed, JSON Lines - one entity/relation per line). Safe to read directly; it holds only domain-model metadata, never credentials or production data.
-- If Node.js/`npx` wasn't available when this project was scaffolded, there is no `mcpServers` entry and no `graph.jsonl`; see "Fallback" below.
+- If Node.js/`npx` wasn't available when this project was scaffolded, there is no `.mcp.json` and no `graph.jsonl`; see "Fallback" below.
+- **Approval:** the scaffold pre-approves this server via `"enabledMcpjsonServers": ["knowledge-graph"]` in `.claude/settings.json`, so you normally don't get a per-server prompt. Two things that still apply: that key is ignored in an **untrusted folder** (each person has to accept the workspace-trust dialog the first time they run `claude` in a fresh clone), and **MCP connections are made when the session starts** - if the server was added or fixed while Claude Code was already running, restart it before the `mcp__knowledge-graph__*` tools appear. Run `claude mcp list` to tell these apart: `✔ Connected` means the config and approval are fine (restart the session if tools are still missing), `pending approval` means approve it, and a server missing from the list entirely means its config isn't being read at all.
 
 ## Who maintains it
 The `knowledge-graph` subagent (`.claude/agents/knowledge-graph.md`) is the only agent that calls the memory-server tools (`read_graph`, `search_nodes`, `open_nodes`, `create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_relations`, `delete_observations`). It collaborates with (and never contradicts) the `domain` agent, which identifies the concepts in prose during design; `knowledge-graph` persists and links them.
@@ -21,7 +22,15 @@ Every run checks before it writes: read the current graph first, then only add w
 This README and `docs/glossary.md` are the human-readable views. For the full graph with relationships, connect an MCP client to the `knowledge-graph` server, or read `graph.jsonl` directly (plain JSON Lines).
 
 ## Fallback (no Node.js/npx)
-Without Node, the graph cannot be MCP-backed. In that case `knowledge-graph` maintains `docs/knowledge-graph/graph.md` (plain markdown tables) instead, and `docs/glossary.md` stays the primary human-readable artifact. Install Node.js and re-run the scaffold with `--overwrite` on `.claude/settings.json` to upgrade later.
+Without Node, the graph cannot be MCP-backed. In that case `knowledge-graph` maintains `docs/knowledge-graph/graph.md` (plain markdown tables) instead, and `docs/glossary.md` stays the primary human-readable artifact. Install Node.js and re-run the scaffold with `--merge-settings` (which creates `.mcp.json`, or adds the server to an existing one without touching your other servers) to upgrade later.
+
+## `MEMORY_FILE_PATH` is an absolute path, on purpose
+`.mcp.json` holds a concrete absolute path to `graph.jsonl`, written when the project was scaffolded. It cannot be made portable, for two compounding reasons, both verified rather than assumed:
+
+- `@modelcontextprotocol/server-memory` resolves a **relative** `MEMORY_FILE_PATH` against **its own module directory** inside the npx cache, not against the project or the process's working directory. A relative path doesn't just write to the wrong place - writes fail outright with `ENOENT` on a lock file under the package's `dist/`.
+- Claude Code substitutes `$CLAUDE_PROJECT_DIR` into hook **commands**, but does **not** export it into an MCP server's process environment. So `${CLAUDE_PROJECT_DIR}` in `.mcp.json` expands to nothing, and the `${CLAUDE_PROJECT_DIR:-.}` fallback form quietly yields `.` - which is the relative-path failure above. `claude mcp list` warns about the missing variable for the no-fallback form; the fallback form silences that warning without fixing the behaviour, which makes it the more dangerous of the two.
+
+**Consequence for teams:** `.mcp.json` is committed, so a teammate cloning this repo to a different path gets a `MEMORY_FILE_PATH` pointing at your machine. They must update that one line locally (the project's `verify_setup.py` warns when the path's parent directory doesn't exist). Alternatively, register the server at user scope per machine (`claude mcp add`) and drop it from `.mcp.json`.
 
 ## Compatibility note
-This setup depends on two Claude Code internals that can change between versions: the `mcp__knowledge-graph__<tool>` naming convention used in `.claude/agents/knowledge-graph.md`'s `tools:` allowlist, and `$CLAUDE_PROJECT_DIR` expanding inside `mcpServers.*.env` in `.claude/settings.json`. If `knowledge-graph` ever reports a tool it should have access to as unavailable, or the memory server can't find `MEMORY_FILE_PATH`, that's the likely cause - check both against your installed Claude Code version's current docs rather than assuming the graph itself is broken.
+This setup depends on a Claude Code internal that can change between versions: the `mcp__knowledge-graph__<tool>` naming convention used in `.claude/agents/knowledge-graph.md`'s `tools:` allowlist. If `knowledge-graph` reports a tool it should have access to as unavailable, check that against your installed Claude Code version's current docs rather than assuming the graph itself is broken.

@@ -32,7 +32,7 @@ python <skill-dir>/scripts/scaffold.py --target <project-dir> --answers <answers
 - Always run `--dry-run` first and show the file list to the user.
 - Existing files are skipped unless the user explicitly approves `--overwrite`.
 - `.tmpl` files get `{{VARIABLES}}` substituted; the suffix is removed.
-- Re-scaffolding an already-set-up project (new version of this skill, or retrofit): use `--merge-settings` instead of `--overwrite` to union new deny rules/hooks/`mcpServers` into the existing `.claude/settings.json` by key, without touching anything else in it or any other existing file.
+- Re-scaffolding an already-set-up project (new version of this skill, or retrofit): use `--merge-settings` instead of `--overwrite` to union new deny rules/hooks into the existing `.claude/settings.json`, and new MCP servers into the existing `.mcp.json`, by key - without touching anything else in either file or any other existing file.
 
 ### Step 3 - Verify
 ```
@@ -55,6 +55,7 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 |---|---|
 | `CLAUDE.md`, `AGENTS.md` | Project rules, security policy, workflow summary |
 | `.claude/settings.json` | `permissions.deny` for DB/secrets + PreToolUse hook |
+| `.mcp.json` (only when `NPX_CMD` was set) | The knowledge-graph MCP memory server. Project-scoped MCP servers live here, at the repo root - Claude Code does **not** read server definitions from `.claude/settings.json`. Needs a one-time approval in an interactive `claude` run before its tools appear |
 | `.claude/hooks/block-db-access.py` + `db_patterns.json` | Hard block of DB CLIs, DB URLs, secrets; rules in the sibling JSON, fails closed if it's missing/invalid |
 | `.claude/hooks/verify-guard.py` | CI guard-rail check: re-runs the deny-rule/hook checks on every push/PR, wired into `ci.yml` |
 | `.claude/scripts/check-traceability.py` | Verifies REQ-ID linkage between `requirements.md`/`tasks.md` (run by `qa` before phase 6, wired into `ci.yml`) |

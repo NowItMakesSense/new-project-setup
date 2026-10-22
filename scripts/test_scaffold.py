@@ -173,16 +173,48 @@ class ScaffoldTests(unittest.TestCase):
     def test_npx_cmd_set_adds_mcp_server(self):
         r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
-        kg = settings["mcpServers"]["knowledge-graph"]
+        # Project-scoped MCP servers live in .mcp.json at the repo root; Claude Code does not
+        # read them from .claude/settings.json.
+        mcp = json.loads((self.target / ".mcp.json").read_text())
+        kg = mcp["mcpServers"]["knowledge-graph"]
         self.assertEqual(kg["command"], "npx")
         self.assertEqual(kg["args"], ["-y", "@modelcontextprotocol/server-memory"])
+        self.assertTrue(kg["env"]["MEMORY_FILE_PATH"].endswith("docs/knowledge-graph/graph.jsonl"))
+        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
+        self.assertNotIn("mcpServers", settings)
         agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text()
         self.assertIn("mcp__knowledge-graph__read_graph", agent)
+
+    def test_mcp_server_is_pre_approved_in_settings(self):
+        """Without enabledMcpjsonServers the server sits at 'pending approval' and exposes no tools."""
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
+        self.assertIn("knowledge-graph", settings["enabledMcpjsonServers"])
+
+    def test_no_mcp_pre_approval_when_npx_none(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
+        self.assertNotIn("enabledMcpjsonServers", settings)
+
+    def test_mcp_memory_path_is_absolute_and_literal(self):
+        """server-memory resolves a relative MEMORY_FILE_PATH against its own module dir (writes
+        then fail with ENOENT), and Claude Code does not export $CLAUDE_PROJECT_DIR to MCP servers -
+        so the path must be absolute and contain no variable reference."""
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        mcp = json.loads((self.target / ".mcp.json").read_text())
+        memory_path = mcp["mcpServers"]["knowledge-graph"]["env"]["MEMORY_FILE_PATH"]
+        self.assertNotIn("$", memory_path)
+        self.assertTrue(Path(memory_path).is_absolute(), memory_path)
+        self.assertEqual(
+            Path(memory_path), self.target.resolve() / "docs" / "knowledge-graph" / "graph.jsonl")
 
     def test_npx_cmd_none_omits_mcp_server(self):
         r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.target / ".mcp.json").exists())
         settings = json.loads((self.target / ".claude" / "settings.json").read_text())
         self.assertNotIn("mcpServers", settings)
         agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text()
@@ -237,7 +269,23 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn("Bash(my-custom-tool:*)", merged["permissions"]["deny"])
         self.assertIn("Bash(psql:*)", merged["permissions"]["deny"])
         self.assertEqual(merged["someCustomKey"], "keep-me")
-        self.assertIn("knowledge-graph", merged["mcpServers"])
+        self.assertNotIn("mcpServers", merged)
+        # The server definition goes to .mcp.json, which didn't exist under NPX_CMD=none.
+        self.assertIn("knowledge-graph", json.loads((self.target / ".mcp.json").read_text())["mcpServers"])
+
+    def test_merge_settings_preserves_other_servers_in_existing_mcp_json(self):
+        run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        mcp_path = self.target / ".mcp.json"
+        mcp = json.loads(mcp_path.read_text())
+        mcp["mcpServers"]["my-own-server"] = {"command": "my-tool", "args": []}
+        mcp["mcpServers"]["knowledge-graph"]["command"] = "customized-npx"
+        mcp_path.write_text(json.dumps(mcp, indent=2), encoding="utf-8")
+
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"), "--merge-settings")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        merged = json.loads(mcp_path.read_text())["mcpServers"]
+        self.assertIn("my-own-server", merged)
+        self.assertEqual(merged["knowledge-graph"]["command"], "customized-npx")
 
     def test_verify_fails_when_deny_rule_removed(self):
         r = run_scaffold(self.target, base_answers())
