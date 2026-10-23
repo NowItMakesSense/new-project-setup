@@ -2,6 +2,18 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-23
+
+**`render-graph.py` also writes `graph.md` as an export of `graph.jsonl`.** In a real project, the stale fallback `graph.md` kept looking like a second source of truth next to `graph.jsonl`. The user asked for it to be regenerated from the graph, but nothing in the scaffold could do that, so the agent wrote a one-off script that would leave the file stale again after the next graph change.
+
+- **Export from `graph.jsonl`:** when `graph.jsonl` exists, every render now also rewrites `docs/knowledge-graph/graph.md`.
+  - It has a generated-file header and the same Entities and Relations tables the fallback reader parses.
+  - Observations are joined with `<br>`, and `|` is escaped as `&#124;`.
+  - The output has no timestamp, so an unchanged graph produces no diff.
+- **Fallback mode:** with no `graph.jsonl`, `graph.md` is the source of truth. The script still only reads it and never writes it.
+- **Docs:** the generated `docs/knowledge-graph/README.md`, the `knowledge-graph` agent, `SKILL.md` and `README.md` describe the export. The agent is told never to write the export itself.
+- **Tests:** two new tests. One checks that the export replaces a stale file, escapes pipes and newlines, is byte-identical on re-render, and round-trips through the fallback reader. The other checks that fallback mode never overwrites `graph.md`. The suite has 64 tests, all passing.
+
 ## 2026-10-22 (8)
 
 **Fix: generated projects now get `docs/security-policy.md`.** Two generated files pointed at a security policy that was never generated. `docs/specs/_templates/requirements.md` said "see `security-policy.md`" and `Database/README.md` said "see `references/security-policy.md`", but that file only existed inside the skill's own `references/`. Found in a real project, where `planner` hit the dangling reference while writing a feature's requirements and had to remove it.

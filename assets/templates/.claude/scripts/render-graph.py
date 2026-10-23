@@ -9,6 +9,10 @@ line, `"type": "entity"` or `"type": "relation"`) or, in fallback mode, the "Ent
 so viewing it needs network access - without it the page lists the concepts instead). The HTML is a
 generated view - never edit it by hand, re-run this script instead.
 
+When the graph comes from `graph.jsonl`, the script also rewrites `graph.md` as a human-readable
+markdown export of it (same "Entities"/"Relations" tables the fallback reads), so the two never drift.
+In fallback mode (no `graph.jsonl`) `graph.md` is the source of truth and is left untouched.
+
 Usage: render-graph.py [--graph-dir docs/knowledge-graph] [--out <path>]
 Exit code 0 when the page was written (an empty graph still produces a page). Standard library only.
 """
@@ -111,6 +115,26 @@ def render(graph: dict, title: str) -> str:
             .replace("__DATA__", data))
 
 
+def md_cell(text: str) -> str:
+    # "|" would split the cell and a newline would end the row; "&#124;" still renders as "|".
+    return " ".join(text.split()).replace("|", "&#124;")
+
+
+def render_markdown(entities: list, relations: list) -> str:
+    """The human-readable export of graph.jsonl. Deterministic (no timestamp), so an unchanged graph
+    produces no diff, and readable back by load_markdown() should graph.jsonl ever go missing."""
+    lines = ["# Domain knowledge graph (generated export)", "",
+             "> Generated from `graph.jsonl`, the source of truth, by `.claude/scripts/render-graph.py` - "
+             "never edit it by hand; it is rewritten every time the graph is rendered.", "",
+             f"{len(entities)} entities, {len(relations)} relations", "",
+             "## Entities", "", "| Name | Type | Observations |", "|---|---|---|"]
+    lines += [f"| {md_cell(e['name'])} | {md_cell(e['entityType'])} | "
+              f"{'<br>'.join(md_cell(o) for o in e['observations'])} |" for e in entities]
+    lines += ["", "## Relations", "", "| From | Relation | To |", "|---|---|---|"]
+    lines += [f"| {md_cell(r['from'])} | {md_cell(r['relationType'])} | {md_cell(r['to'])} |" for r in relations]
+    return "\n".join(lines) + "\n"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--graph-dir", default="docs/knowledge-graph")
@@ -122,6 +146,10 @@ def main() -> None:
     jsonl, md = graph_dir / "graph.jsonl", graph_dir / "graph.md"
     if jsonl.is_file():
         entities, relations = load_jsonl(jsonl)
+        # graph.md is only a generated export when graph.jsonl exists; in fallback mode it is the
+        # source of truth and is never written here.
+        md.write_text(render_markdown(entities, relations), encoding="utf-8", newline="\n")
+        print(f"Wrote {md} (markdown export of {jsonl.name})")
     elif md.is_file():
         entities, relations = load_markdown(md)
     else:
