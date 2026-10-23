@@ -161,7 +161,8 @@
   /* ---------- types menu ---------- */
   .legend {
     position: fixed; z-index: 2; left: var(--edge-gap); bottom: calc(var(--edge-gap) + env(safe-area-inset-bottom, 0px));
-    width: 248px; max-height: calc(100dvh - var(--top) - 48px - 2 * var(--edge-gap));
+    width: 248px; max-height: calc(100dvh - var(--top) - 48px - 2 * var(--edge-gap) - 1rem);
+    margin-bottom: 1rem;
     display: flex; flex-direction: column; border-radius: var(--radius-pane); padding: 6px 6px 10px;
   }
   .pane-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px 0 12px; flex-shrink: 0; }
