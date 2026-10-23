@@ -585,6 +585,46 @@ class ScaffoldTests(unittest.TestCase):
         self.assertNotIn("WARN", p.stdout)
         self.assertIn('"contains"', (kg_dir / "graph.html").read_text(encoding="utf-8"))
 
+    def test_render_graph_exports_markdown_from_jsonl(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        kg_dir = self.target / "docs" / "knowledge-graph"
+        lines = [
+            {"type": "entity", "name": "Order", "entityType": "Aggregate",
+             "observations": ["total | net", "multi\nline"]},
+            {"type": "entity", "name": "Money", "entityType": "ValueObject", "observations": []},
+            {"type": "relation", "from": "Order", "to": "Money", "relationType": "priced in"},
+        ]
+        (kg_dir / "graph.md").write_text("stale hand-written fallback\n", encoding="utf-8")
+        (kg_dir / "graph.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+        script = self.target / ".claude" / "scripts" / "render-graph.py"
+        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        md = (kg_dir / "graph.md").read_text(encoding="utf-8")
+        self.assertNotIn("stale hand-written fallback", md)
+        self.assertIn("Generated from `graph.jsonl`", md)
+        self.assertIn("| Order | Aggregate | total &#124; net<br>multi line |", md)
+        self.assertIn("| Order | priced in | Money |", md)
+        # Deterministic: re-rendering an unchanged graph leaves the export byte-identical.
+        subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertEqual(md, (kg_dir / "graph.md").read_text(encoding="utf-8"))
+        # The export round-trips through the markdown fallback reader.
+        (kg_dir / "graph.jsonl").unlink()
+        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertIn("2 entities, 1 relations", p.stdout)
+
+    def test_render_graph_never_overwrites_markdown_in_fallback_mode(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        kg_dir = self.target / "docs" / "knowledge-graph"
+        source = ("# Knowledge graph\n\n## Entities\n| Name | Type | Observations |\n|---|---|---|\n"
+                  "| Order | Aggregate | a |\n")
+        (kg_dir / "graph.md").write_text(source, encoding="utf-8")
+        script = self.target / ".claude" / "scripts" / "render-graph.py"
+        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual((kg_dir / "graph.md").read_text(encoding="utf-8"), source)
+
     def test_knowledge_graph_agent_regenerates_html(self):
         r = run_scaffold(self.target, base_answers())
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
