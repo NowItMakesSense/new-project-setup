@@ -2,6 +2,23 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (7)
+
+**KG view: minimal controls in the bottom-right corner.** These changes came from reviewing the layout live with the user.
+
+- **Types menu:** the menu gets `margin-bottom: 1rem`, so it sits 28px above the bottom edge, and the same 1rem comes off its `max-height`.
+- **View controls:**
+  - They are back in the bottom-right corner, on the same baseline as the Types menu, and the detail sheet stops above them again.
+  - They are now three icons in a small glass pill. Each name appears as a quiet tooltip on hover (after a 350ms delay, and it leaves at once) or on keyboard focus; the last one is right-aligned so it stays on screen.
+  - Keycaps are gone from the UI. L/R/C still work and are exposed through `aria-keyshortcuts`.
+  - Auto-rotate's on state is now a subtle fill instead of the inverted white button.
+- **Preview note:** a stale render seen in an earlier round turned out to be Chrome's heuristic cache on `python -m http.server`. The scratchpad preview server now sends `Cache-Control: no-store`. This affected only the preview; nothing shipped changed for it.
+- **Verified live in Chrome:**
+  - the tooltips on hover;
+  - the sheet ending above the controls;
+  - the legend and controls sharing a 28px baseline;
+  - the CDP interaction checks and the 59 regression tests pass.
+
 ## 2026-10-22 (6)
 
 **KG view: controls always on screen, and the Types menu ends on a whole row.** Changes requested after a second look at the layout in the user's browser.
