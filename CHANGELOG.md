@@ -2,6 +2,96 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (7)
+
+**KG view: minimal controls in the bottom-right corner.** These changes came from reviewing the layout live with the user.
+
+- **Types menu:** the menu gets `margin-bottom: 1rem`, so it sits 28px above the bottom edge, and the same 1rem comes off its `max-height`.
+- **View controls:**
+  - They are back in the bottom-right corner, on the same baseline as the Types menu, and the detail sheet stops above them again.
+  - They are now three icons in a small glass pill. Each name appears as a quiet tooltip on hover (after a 350ms delay, and it leaves at once) or on keyboard focus; the last one is right-aligned so it stays on screen.
+  - Keycaps are gone from the UI. L/R/C still work and are exposed through `aria-keyshortcuts`.
+  - Auto-rotate's on state is now a subtle fill instead of the inverted white button.
+- **Preview note:** a stale render seen in an earlier round turned out to be Chrome's heuristic cache on `python -m http.server`. The scratchpad preview server now sends `Cache-Control: no-store`. This affected only the preview; nothing shipped changed for it.
+- **Verified live in Chrome:**
+  - the tooltips on hover;
+  - the sheet ending above the controls;
+  - the legend and controls sharing a 28px baseline;
+  - the CDP interaction checks and the 59 regression tests pass.
+
+## 2026-10-22 (6)
+
+**KG view: controls always on screen, and the Types menu ends on a whole row.** Changes requested after a second look at the layout in the user's browser.
+
+- **View controls:** Hide/Show labels, Auto-rotate and Center moved from a bottom-centre pill into the top bar, next to the search, at the same 48px height. They now sit with the other global controls and can't fall below the visible area. As the window narrows, the bar sheds detail in a fixed order: keycaps (≤1500px), then the question sentence (≤1280px), then a narrower search (≤1000px), then the control names, leaving icons with an `aria-label` and a tooltip (≤900px). The controls themselves never go. With no bottom band left to reserve, the detail sheet now reaches the bottom edge.
+- **Types menu:** the list now holds exactly five whole rows (`max-height: 184px`) with 10px below the last one, instead of a half-cut row pressed against the pane's bottom edge. The scroll thumb and the edge fade signal that there's more.
+- **Verified live in Chrome** (claude-in-chrome MCP) at 1370×637 and 500×637:
+  - scrolling the menu to its last kind;
+  - the sheet down to the bottom edge;
+  - icon-only controls in the top bar on a phone;
+  - no console errors.
+- `inspect.mjs --app --allow glass` reports 0 FAIL and 1 WARN, `hero-void`. The headless capture lands while the page still shows "Loading the 3D view…", before the canvas has drawn, and with the controls no longer at the bottom, the lower half of that frame is empty stage. The live render fills it. The CDP interaction checks and the 59 tests pass.
+
+## 2026-10-22 (5)
+
+**KG view: a compact Types menu and explicit view controls**, from reviewing the glass layout in the user's own browser.
+
+- **Types menu:** the row list now stops at about 5.5 rows (`max-height: 200px`) and scrolls inside the glass pane, and the half-visible row signals that there's more. Before, it grew to the window height and got cut off on short screens. Below 1100px it sits above the toolbar instead of beneath it.
+- **Toolbar:** now centred at the bottom, with an icon, an explicit name and a keycap on every control.
+  - **Hide labels / Show labels** (`L`): an action whose name says what it will do, with a struck icon once labels are off.
+  - **Auto-rotate** (`R`): a real toggle.
+  - **Center** (`C`, and `F` as before).
+  - On phones the keycaps drop, and below 480px only the icons remain.
+- **Auto-rotate under reduced motion:** the control stays available even with `prefers-reduced-motion` (for example, Windows animation effects off), just slower (0.2 instead of 0.5). Hiding it made the control look missing, and rotation only ever starts on an explicit click.
+- **Fix:** the labels-off icon toggles the SVG `hidden` attribute with `toggleAttribute`, because SVG elements have no `.hidden` property.
+- **Verified live in Chrome** (claude-in-chrome MCP), by mouse and with the L/R/C shortcuts:
+  - scrolling the Types menu to its last kind, including the top fade;
+  - Hide/Show labels, Auto-rotate on/off and Center;
+  - the 500px layout.
+- `inspect.mjs --app --allow glass` reports 0 FAIL / 0 WARN, and the CDP interaction script passes (its Labels and reduced-motion checks were updated for the new behaviour).
+
+## 2026-10-22 (4)
+
+**The KG view goes glass, and glass becomes a standard material in `frontend-craft`.** Asked for: a better search field, a transparent Types menu whose scrollbar stopped breaking the layout, and a modern glass look applied consistently to every component.
+
+- **The rule, researched in the installed skills:**
+  - taste-skill bans glass on app screens (`glass` is a FAIL in `inspect.mjs`).
+  - apple-design (§12, materials and depth) prescribes it for chrome floating over live content: weights that encode hierarchy, a light edge, never glass on glass, vibrancy, scroll-edge fades, and a reduced-transparency fallback.
+  - The prototype skill's picker gives a concrete dark-glass recipe.
+  - `frontend-craft` now settles the conflict with a **Glass material** section in `references/materials-type.md`. Glass is allowed only for chrome over live content (a canvas, map, media or 3D scene) when `design.md` chooses it, never as cards on an ordinary dashboard and never glass on glass.
+  - The section defines three weights (thin/regular/thick, with fill and backdrop values), one edge, fills rather than blur inside panes, the `-webkit-` twin, solid fallbacks, the cost rules (never animate `backdrop-filter`; no blur on a full-screen scrim or on moving labels) and how to scroll inside glass.
+  - The short rules, the banned tables, the review checklist and the `frontend` agent all point to it, and `inspect.mjs --allow glass` is the documented way to measure an approved glass screen.
+- **KG view:**
+  - **Stage:** the graph now fills the whole viewport. A transparent WebGL canvas sits over a faint fixed ambient light (two blurred colour fields, plain fills rather than gradients, never animated), so the glass has something to refract.
+  - **Top:** two floating islands. One holds the title with the question sentence and the undeclared pill. The other is a 48px thin-glass **search pill** with an icon, placeholder and a `Ctrl K` / `⌘ K` keycap that matches the platform.
+  - **Command palette:** thick glass, still opening with no animation because it's keyboard-driven. It has a 52px input well with an `Esc` keycap, a results header with the match count ("8 of 12"), names with the typed part in `<mark>` (built from text nodes), a selected row as a white-alpha fill, and a hint footer.
+  - **Types menu:** regular glass with a header (total, plus "Show all" once a kind is hidden). Its rows scroll in their own container with a thin overlay thumb inside the radius, `scrollbar-gutter: stable` and edge fades, so counts no longer shift and the native scrollbar no longer cuts the corner. The same treatment applies to the sheet body, the palette results and the fallback list.
+  - **Detail sheet:** regular glass, sticky head, observations as one inset group. Opening it shifts the camera's view offset with the sheet (same 240/180ms ease-out) so the selected concept centres in the free space: left of the sheet on desktop, above it on a phone.
+  - **Other components:**
+    - The toolbar is a regular-glass pill, compact and centred on phones (it used to stretch full width).
+    - 3D labels are semi-transparent chips with the same edge but no per-label blur.
+    - `fit()` frames the band the floating panes leave free.
+  - **New loading state:** a quiet glass status ("Loading the 3D view of 23 concepts…") replaces the blank screen while the engine loads; the taste-skill inspector caught that blank.
+  - **Fallbacks:** without `backdrop-filter`, with reduced transparency, or with more contrast, every weight becomes a solid surface. Reduced motion is unchanged.
+- **Verified:**
+  - Live in Chrome through the claude-in-chrome MCP at 1370×637, 1370×409 (where the Types menu scrolls) and 500×637:
+    - the palette: typing, highlight, arrow keys, Enter;
+    - the sheet and its view-offset centring on desktop and on a phone;
+    - hiding two kinds and then "Show all";
+    - the legend scroll thumb and its fades;
+    - the empty state and the 1,500-node graph;
+    - no console errors.
+  - `inspect.mjs --app --allow glass` reports 0 FAIL / 0 WARN.
+  - The real-input CDP script passes all 16 checks.
+  - The regression suite gained two tests (the template's glass material, fallbacks, prefixed twins and scroll treatment; `frontend-craft` documenting the material).
+
+## 2026-10-22 (3)
+
+**Bug fix: the KG view greyed out kinds that carry a qualifier.** Found re-rendering Deckloom's graph: its agent records kinds like `Value Object (imutável)`, `Entity (aggregate root)` and `Actor / Entity (aggregate root)`, and `graph-view.html`'s `kindKey` only matched the bare word, so 13 of 16 concepts fell through to neutral grey and no aggregate got the accent hue.
+
+- `kindKey` now treats any kind mentioning "aggregate" as an aggregate, drops parenthetical notes, and keeps the part after the last `/`. Legend labels still show the project's own wording.
+- `test_scaffold.py` gained `test_graph_view_maps_qualified_kinds_to_ddd_hues`, which runs the template's own `kindKey` in Node (skipped when Node isn't installed). 57 tests pass.
+
 ## 2026-10-22 (2)
 
 **A front-end team for projects with a UI, and the knowledge-graph view rebuilt with it.** The first `graph.html` looked generic (stock spheres, floating boxes, hover-only labels), and the cause was general: nothing in a generated project carried design-engineering taste past the UX `designer`. Both are now built on two MIT-licensed skill collections - Emil Kowalski's skills (motion, polish, worst-case data, Apple's fluid-interface principles) and Leonxlnx's taste-skill (art direction, app-screen rules from measured product screens, a real-browser inspector).

@@ -24,7 +24,7 @@ Then, for either kind, write down before any markup:
 
 ## The short form of the rules
 - Colour goes on data, status and at most one control, never on chrome. At most four hues on a screen.
-- No gradients on surfaces, buttons or text; no glows, no glass/backdrop blur, no shadows on things at rest. Separate surfaces by a lightness step or a single 1px line, never both. If a design really needs one of these (a glow on data marks in a visualisation, say), name it as a deliberate exception in `design.md` with its reason.
+- No gradients on surfaces, buttons or text; no glows, no ad-hoc glass/backdrop blur, no shadows on things at rest. Separate surfaces by a lightness step or a single 1px line, never both. Glass: the glass material in `references/materials-type.md` is the one exception, for chrome floating over live content (a canvas, map, media, 3D scene) when `design.md` chooses it - never glass cards on an ordinary dashboard, never glass on glass. Anything else that breaks these (a glow on data marks in a visualisation, say) is a deliberate exception named in `design.md` with its reason.
 - No eyebrow labels above headings, no tracked uppercase micro-labels, no index numbering (01/02/03), no emoji, no lorem, no "Acme"/"John Doe", no invented proof or vanity numbers.
 - One typeface (two at most, each with one job). Tabular figures on every number that aligns or updates. Sentence case.
 - Animate only `transform` and `opacity`, under 300ms for UI, with strong ease-out curves; never animate keyboard-initiated actions; never from `scale(0)`; exits faster than entrances; every motion has a `prefers-reduced-motion` fallback.
@@ -41,7 +41,7 @@ Then, for either kind, write down before any markup:
 
 ## Deeper tooling, when installed
 These rules are distilled from two MIT-licensed skill collections. When their full versions are installed (globally with `npx skills@latest add emilkowalski/skills -g` and `npx skills@latest add Leonxlnx/taste-skill -g`), load the relevant one with the Skill tool for depth:
-- `design-taste-frontend` - deals researched directions and app styles with `node <skill>/scripts/draw.mjs` (add `--app` for app screens) and measures the built page in a real browser with `node <skill>/scripts/inspect.mjs <page>` (screenshots at 1440/768/390, `--app` for app rules). Requires Node 22+ and an installed Chrome/Edge/Chromium. Run `inspect.mjs` before reporting a UI task done and fix every `FAIL`.
+- `design-taste-frontend` - deals researched directions and app styles with `node <skill>/scripts/draw.mjs` (add `--app` for app screens) and measures the built page in a real browser with `node <skill>/scripts/inspect.mjs <page>` (screenshots at 1440/768/390, `--app` for app rules). Requires Node 22+ and an installed Chrome/Edge/Chromium. Run `inspect.mjs` before reporting a UI task done and fix every `FAIL`; a screen that uses the approved glass material runs it with `--allow glass` and says so in the report - allow nothing the design didn't choose.
 - `emil-design-eng`, `animate`, `review-animations`, `animation-performance`, `apple-design`, `break-ui` - the motion, polish, performance and worst-case detail behind `references/motion.md`, `references/review.md` and `references/worst-case.md`.
 
 Without them, work from these references alone and say so in your report - never claim a browser check you did not run.

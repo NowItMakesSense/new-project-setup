@@ -8,13 +8,17 @@
   Generated view of docs/knowledge-graph/ - do not edit the copy in docs/, re-run
   .claude/scripts/render-graph.py instead. This template is .claude/scripts/graph-view.html.
 
-  Design: an app screen (taste-skill app-screens, style "true-black-flat") whose one question is
-  "what does the domain contain and how does it connect?" - the graph is the biggest thing on it.
-  Colour lives on data only (the nodes), elevation is a lightness step, nothing at rest has a border
-  or shadow. Motion follows Emil Kowalski's rules: keyboard actions never animate, UI moves stay
-  under 300ms with strong ease-out curves, exits are faster than entrances, camera moves can be
-  interrupted and start from where the camera is. The node glow is the one deliberate exception to
-  the "no glows" app rule: it sits on data, never on chrome.
+  Design: an app screen whose one question is "what does the domain contain and how does it
+  connect?" - the graph fills the whole viewport and every control floats over it as glass
+  (frontend-craft's glass material, after apple-design's translucent materials): three weights
+  (thin for standalone controls, regular for panes, thick for the palette), one light edge, one
+  float shadow, never glass on glass, solid fallbacks for reduced transparency / more contrast /
+  no backdrop-filter. Glass and the ambient light behind it are deliberate exceptions to
+  taste-skill's app rules, chosen for this screen; colour still lives on data only. The palette
+  scrim and the 3D labels are not blurred on purpose: a full-screen or per-label backdrop blur over
+  a canvas that repaints every frame costs too much. Motion follows Emil Kowalski's rules:
+  keyboard actions never animate, UI moves stay under 300ms with strong ease-out curves, exits are
+  faster than entrances, camera moves can be interrupted, and backdrop-filter is never animated.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,120 +26,198 @@
 <style>
   :root {
     color-scheme: dark;
-    /* true-black-flat, cool near-black ground for a developer tool */
-    --ground: #0c0d0f;
-    --surface: #15171a;
-    --raised: #23262b;
-    --active: #2c3036;
-    --control: #444444;
+    --ground: #0a0b0d;
     --text: #ffffff;
-    --muted: #b4b4b4;
-    --faint: #949494;
+    --muted: #c9cbd0;             /* vibrancy: secondary text over glass sits brighter than on a solid surface */
+    --faint: #a3a6ad;
     --accent: #c6f24e;            /* the one data hue: aggregates, the heart of the model */
-    --pill-warning-bg: #2b2414; --pill-warning-ink: #e5a93b;
-    --radius-card: 20px;
+    --warn: #e5a93b;
+
+    /* The glass material (frontend-craft/references/materials-type.md): three weights, one edge,
+       one float shadow. Hierarchy comes from weight; a glass surface never sits on another one -
+       anything inside a pane uses the fills below, never a second blur. */
+    --glass-thin: rgba(255, 255, 255, 0.07);
+    --glass-regular: rgba(17, 19, 23, 0.56);
+    --glass-thick: rgba(15, 17, 21, 0.78);
+    --blur-thin: blur(16px) saturate(160%);
+    --blur-regular: blur(24px) saturate(170%);
+    --blur-thick: blur(32px) saturate(180%);
+    --edge: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    --edge-strong: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    --float: 0 10px 30px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.18);
+    --fill-hover: rgba(255, 255, 255, 0.06);
+    --fill-active: rgba(255, 255, 255, 0.1);
+    --well: rgba(0, 0, 0, 0.28);
+    --hairline: rgba(255, 255, 255, 0.07);
+    --solid: #16181c;             /* what every glass weight becomes without blur */
+
+    --radius-pane: 20px;
     --radius-control: 999px;
-    --gap: 14px;
-    --pad: 22px;
-    --control-height: 36px;
-    --bar: 48px;
+    --control-height: 40px;
+    --edge-gap: 12px;
+    --top: calc(var(--edge-gap) + env(safe-area-inset-top, 0px));
     --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--ground); color: var(--text); }
-  body {
-    font: 400 14px/20px var(--font);
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-  }
+  body { font: 400 14px/20px var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
   button, input { font: inherit; color: inherit; }
   button { cursor: pointer; }
   [hidden] { display: none !important; }
   .num { font-variant-numeric: tabular-nums; }
-  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid rgba(255, 255, 255, 0.72); outline-offset: 2px; }
 
-  /* ---------- shell ---------- */
-  .bar {
-    position: fixed; inset: 0 0 auto 0; z-index: 3;
-    height: calc(var(--bar) + env(safe-area-inset-top, 0px));
-    padding: env(safe-area-inset-top, 0px) 24px 0;
-    display: flex; align-items: center; gap: 16px;
-    background: var(--ground);
+  /* ---------- the material ---------- */
+  .glass, .glass-thin, .glass-thick {
+    background: var(--glass-regular);
+    -webkit-backdrop-filter: var(--blur-regular); backdrop-filter: var(--blur-regular);
+    box-shadow: var(--edge), var(--float);
   }
-  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; max-width: 45%; }   /* the name yields last */
-  .brand svg { flex-shrink: 0; }
-  .brand h1 {
-    margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .question { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .pill-warning {
-    flex-shrink: 0; height: 22px; padding: 0 10px; border-radius: 999px; border: 0;
-    background: var(--pill-warning-bg); color: var(--pill-warning-ink); font-size: 12px; font-weight: 500;
-  }
-  .bar .spacer { flex: 1; }
-  .search {
-    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-    height: var(--control-height); padding: 0 8px 0 16px; width: 260px;
-    border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--faint);
-    transition: transform 160ms var(--ease-out);
-  }
-  .search span { flex: 1; text-align: left; }
+  .glass-thin { background: var(--glass-thin); -webkit-backdrop-filter: var(--blur-thin); backdrop-filter: var(--blur-thin); }
+  .glass-thick { background: var(--glass-thick); -webkit-backdrop-filter: var(--blur-thick); backdrop-filter: var(--blur-thick); }
+  .chip { background: var(--fill-hover); box-shadow: var(--edge); }   /* a control inside a pane: fill, no blur */
+
   kbd {
-    font: 500 12px/20px var(--font); color: var(--muted); padding: 0 7px; border-radius: 6px;
-    background: var(--raised);
+    display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px;
+    font: 500 12px/1 var(--font); color: var(--muted); border-radius: 6px;
+    background: var(--fill-hover); box-shadow: var(--edge);
   }
 
-  /* ---------- stage ---------- */
-  #stage { position: fixed; inset: calc(var(--bar) + env(safe-area-inset-top, 0px)) 0 0 0; }
+  /* ---------- scroll inside glass: a thin overlay thumb inside the radius, and edge fades ---------- */
+  .scroll {
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+    --fade-top: 0px; --fade-bottom: 0px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  }
+  .scroll.fade-top { --fade-top: 18px; }
+  .scroll.fade-bottom { --fade-bottom: 18px; }
+  .scroll::-webkit-scrollbar { width: 10px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; margin-block: 8px; }
+  .scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box;
+  }
+  .scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.32); }
+  @supports not selector(::-webkit-scrollbar) {
+    .scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+  }
+
+  /* ---------- ambient light: what the glass refracts (fixed, never animated) ---------- */
+  .ambient { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .ambient i { position: absolute; border-radius: 50%; filter: blur(110px); }
+  .ambient i:nth-child(1) { width: 52vmax; height: 52vmax; left: -14vmax; top: -18vmax; background: #c6f24e; opacity: 0.07; }
+  .ambient i:nth-child(2) { width: 58vmax; height: 58vmax; right: -20vmax; bottom: -24vmax; background: #4f7cff; opacity: 0.08; }
+
+  /* ---------- stage: the graph runs under every pane ---------- */
+  #stage { position: fixed; inset: 0; z-index: 1; }
   #stage canvas { display: block; outline: none; }
   .labels { pointer-events: none; }
   .label {
     pointer-events: none; white-space: nowrap;
-    font: 500 13px/18px var(--font); color: var(--muted);
-    padding: 0 6px; border-radius: 6px; background: rgba(12, 13, 15, 0.72);   /* a scrim, not a shadow */
+    font: 500 13px/20px var(--font); color: var(--muted); letter-spacing: 0.005em;
+    padding: 0 8px; border-radius: 999px;
+    background: rgba(10, 11, 13, 0.58); box-shadow: var(--edge);   /* same family as the panes, without a per-label blur */
     transform: translateY(calc(-100% - 10px));
   }
   .label.strong { color: var(--text); font-weight: 600; }
   .label.dim, .label.clash { opacity: 0; }
 
-  /* ---------- floating surfaces (no border, no shadow: a lightness step) ---------- */
-  .card { background: var(--surface); border-radius: var(--radius-card); }
+  /* ---------- top: two floating islands ---------- */
+  .top {
+    position: fixed; z-index: 3; top: var(--top); left: var(--edge-gap); right: var(--edge-gap);
+    display: flex; align-items: center; gap: 12px; pointer-events: none;
+  }
+  .top > * { pointer-events: auto; }
+  .brand {
+    display: flex; align-items: center; gap: 12px; min-width: 0; height: 48px; padding: 0 16px 0 14px;
+    border-radius: 16px;
+  }
+  .brand svg { flex-shrink: 0; }
+  .brand h1 {
+    margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 40vw;
+  }
+  .question { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .sep { width: 1px; height: 20px; background: var(--hairline); flex-shrink: 0; }
+  .pill-warning {
+    flex-shrink: 0; height: 24px; padding: 0 10px; border: 0; border-radius: 999px;
+    background: rgba(229, 169, 59, 0.14); box-shadow: inset 0 0 0 1px rgba(229, 169, 59, 0.28);
+    color: var(--warn); font-size: 12px; font-weight: 600;
+    transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  }
+  .top .spacer { flex: 1; }
+  .search {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    height: 48px; width: 320px; padding: 0 10px 0 16px; border: 0; border-radius: 16px;
+    color: var(--faint); text-align: left;
+    transition: transform 160ms var(--ease-out), box-shadow 160ms ease, color 160ms ease;
+  }
+  .search svg { flex-shrink: 0; color: var(--muted); }
+  .search .ph { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search .keys { display: flex; gap: 4px; flex-shrink: 0; }
+
+  /* ---------- types menu ---------- */
   .legend {
-    position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2;
-    width: 236px; max-height: calc(100dvh - var(--bar) - 112px); overflow: auto; padding: 14px 8px 8px;
+    position: fixed; z-index: 2; left: var(--edge-gap); bottom: calc(var(--edge-gap) + env(safe-area-inset-bottom, 0px));
+    width: 248px; max-height: calc(100dvh - var(--top) - 48px - 2 * var(--edge-gap) - 1rem);
+    margin-bottom: 1rem;
+    display: flex; flex-direction: column; border-radius: var(--radius-pane); padding: 6px 6px 10px;
   }
-  .legend h2, .sheet h3 { margin: 0 12px 6px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--faint); }
-  .legend button {
-    width: 100%; height: 34px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent;
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px 0 12px; flex-shrink: 0; }
+  .pane-head h2 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; letter-spacing: 0.005em; }
+  .pane-head .total { color: var(--faint); font-size: 12px; font-weight: 500; }
+  .pane-head .spacer { flex: 1; }
+  .link {
+    border: 0; background: transparent; padding: 4px 8px; margin-right: -6px; border-radius: 8px;
+    color: var(--muted); font-size: 12px; font-weight: 600; transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  }
+  .legend-rows { padding: 2px 0; min-height: 0; max-height: 184px; }   /* exactly five whole rows; the thumb and the edge fade say it scrolls */
+  .legend-rows button {
+    width: 100%; height: 36px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent;
     display: flex; align-items: center; gap: 10px; text-align: left;
-    transition: transform 160ms var(--ease-out), opacity 160ms ease;
+    transition: transform 160ms var(--ease-out), opacity 160ms ease, background-color 160ms ease;
   }
-  .legend button .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .legend button .count { color: var(--muted); }
-  .legend button[aria-pressed="false"] { opacity: 0.4; }
+  .legend-rows .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-rows .count { color: var(--muted); flex-shrink: 0; min-width: 2ch; text-align: right; }
+  .legend-rows button[aria-pressed="false"] { opacity: 0.42; }
+  .legend-rows button[aria-pressed="false"] .swatch { box-shadow: inset 0 0 0 1.5px var(--faint); background: transparent !important; }
   .swatch { flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%; }
   .swatch.ring { background: transparent !important; box-shadow: inset 0 0 0 2px var(--swatch); }
-  .swatch.hollow { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); border: 1.5px dashed transparent; }
+  .swatch.hollow { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); }
 
+  /* ---------- toolbar ---------- */
   .tools {
-    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2;
-    display: flex; gap: 8px; padding: 6px; border-radius: 999px; background: var(--surface);
+    position: fixed; z-index: 2; right: var(--edge-gap); bottom: calc(var(--edge-gap) + 1rem + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 2px; padding: 4px; border-radius: 999px;
   }
   .tool {
-    height: var(--control-height); padding: 0 16px; border: 0; border-radius: var(--radius-control);
-    background: var(--raised); color: var(--text); font-weight: 500;
+    position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+    border: 0; border-radius: 999px; background: transparent; color: var(--muted);
     transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease;
   }
-  .tool[aria-pressed="true"] { background: var(--text); color: #000; }   /* primary by inversion */
+  .tool svg { display: block; }
+  .tool[aria-pressed="true"] { background: var(--fill-active); color: var(--text); box-shadow: inset 0 0 0 1px var(--hairline); }
+  /* The name, shown on hover or keyboard focus: a small tooltip above the button, after a short
+     delay so passing over the bar doesn't flash it; it leaves at once. */
+  .tool .tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; pointer-events: none; white-space: nowrap;
+    padding: 4px 9px; border-radius: 8px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--text);
+    background: rgba(15, 17, 21, 0.92); box-shadow: var(--edge), 0 4px 12px rgba(0, 0, 0, 0.3);
+    opacity: 0; transform: translate(-50%, 4px) scale(0.97); transform-origin: 50% 100%;
+    transition: opacity 100ms ease, transform 100ms var(--ease-out);
+  }
+  .tool:focus-visible .tip { opacity: 1; transform: translate(-50%, 0) scale(1); transition-duration: 125ms; }
+  .tool:last-child .tip { left: auto; right: 0; transform: translate(0, 4px) scale(0.97); transform-origin: 100% 100%; }
+  .tool:last-child:focus-visible .tip { transform: none; }
 
   /* ---------- detail sheet: in from the right, out the same way, faster ---------- */
   .sheet {
-    position: fixed; z-index: 2; top: calc(var(--bar) + env(safe-area-inset-top, 0px) + 8px); right: 16px;
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
-    width: min(360px, calc(100vw - 32px)); overflow: auto; padding: var(--pad) 8px 12px;
+    position: fixed; z-index: 2; right: var(--edge-gap);
+    top: calc(var(--top) + 48px + var(--edge-gap)); bottom: calc(2 * var(--edge-gap) + 1rem + 48px + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100vw - 2 * var(--edge-gap))); border-radius: var(--radius-pane);
+    display: flex; flex-direction: column; padding: 6px;
     transform: translateX(calc(100% + 24px)); opacity: 0; visibility: hidden;
     transition: transform 180ms var(--ease-out), opacity 180ms ease, visibility 0s linear 180ms;
   }
@@ -143,23 +225,23 @@
     transform: none; opacity: 1; visibility: visible;
     transition: transform 240ms var(--ease-out), opacity 240ms ease, visibility 0s;
   }
-  .sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px; }
+  .sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 8px 12px 14px; flex-shrink: 0; }
   .sheet-head > div { flex: 1; min-width: 0; }
-  .kind { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; line-height: 16px; }
-  .sheet h2 {
-    margin: 6px 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em;
-    overflow-wrap: anywhere;
-  }
-  .meta { color: var(--faint); font-size: 12px; }
+  .kind { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+  .sheet h2 { margin: 6px 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .meta { color: var(--faint); font-size: 12px; font-weight: 500; }
   .close {
-    flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 999px; background: var(--raised);
-    display: grid; place-items: center; transition: transform 160ms var(--ease-out);
+    flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 999px;
+    display: grid; place-items: center; color: var(--muted); transition: transform 160ms var(--ease-out), background-color 160ms ease;
   }
-  .sheet section { margin-top: 20px; }
+  .sheet-body { flex: 1; min-height: 0; padding: 0 0 6px; }
+  .sheet section + section { margin-top: 14px; }
+  .sheet h3 { margin: 0 12px 6px 14px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--faint); letter-spacing: 0.01em; }
   .sheet ul { list-style: none; margin: 0; padding: 0; }
-  .obs li { padding: 8px 14px; color: var(--text); overflow-wrap: anywhere; }
-  .obs li + li { border-top: 1px solid var(--raised); }
-  .rel-group { margin-top: 12px; }
+  .obs { margin: 0 6px !important; border-radius: 14px; background: var(--fill-hover); }
+  .obs li { padding: 10px 12px; color: var(--text); overflow-wrap: anywhere; }
+  .obs li + li { box-shadow: inset 0 1px 0 var(--hairline); }
+  .rel-group + .rel-group { margin-top: 8px; }
   .rel-group h4 { margin: 0 14px 2px; font-size: 12px; font-weight: 500; color: var(--faint); overflow-wrap: anywhere; }
   .hop {
     width: 100%; min-height: 40px; padding: 8px 14px; border: 0; border-radius: 12px; background: transparent;
@@ -168,120 +250,184 @@
   }
   .hop .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .hop .dir { color: var(--faint); font-size: 12px; flex-shrink: 0; }
-  .empty-note { padding: 8px 14px; color: var(--faint); }
+  .empty-note { padding: 10px 12px; color: var(--faint); }
 
   /* ---------- command palette: keyboard-opened, so it never animates ---------- */
-  .scrim { position: fixed; inset: 0; z-index: 4; background: rgba(0, 0, 0, 0.5); }
+  .scrim { position: fixed; inset: 0; z-index: 4; background: rgba(0, 0, 0, 0.42); }   /* dim only: a full-screen blur over a live canvas costs every frame */
   .palette {
-    position: fixed; z-index: 5; left: 50%; top: 96px; transform: translateX(-50%);
-    width: min(560px, calc(100vw - 32px)); padding: 8px; background: var(--surface); border-radius: var(--radius-card);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);   /* it floats */
+    position: fixed; z-index: 5; left: 50%; top: 12vh; transform: translateX(-50%);
+    width: min(600px, calc(100vw - 2 * var(--edge-gap))); max-height: 70vh;
+    display: flex; flex-direction: column; padding: 8px; border-radius: 22px;
   }
-  .palette input {
-    width: 100%; height: 48px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--raised);
-    font-size: 16px; outline: none;
+  .field {
+    display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 12px 0 16px; flex-shrink: 0;
+    border-radius: 15px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);
   }
-  .palette input::placeholder { color: var(--faint); }
-  .results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 360px; overflow: auto; }
+  .field svg { flex-shrink: 0; color: var(--muted); }
+  .field input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; font-size: 16px; outline: none; }
+  .field input::placeholder { color: var(--faint); }
+  .results-head { display: flex; justify-content: space-between; padding: 12px 14px 6px; color: var(--faint); font-size: 12px; font-weight: 600; flex-shrink: 0; }
+  .results { list-style: none; margin: 0; padding: 0; min-height: 0; }
   .results li {
-    display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-radius: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 13px; cursor: pointer;
   }
-  .results li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .results li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .results li .type { color: var(--faint); font-size: 12px; flex-shrink: 0; }
-  .results li[aria-selected="true"] { background: var(--raised); }
-  .results .none { color: var(--faint); cursor: default; overflow-wrap: anywhere; height: auto; padding: 10px 14px; }
+  .results li[aria-selected="true"] { background: var(--fill-active); box-shadow: inset 0 0 0 1px var(--hairline); }
+  .results li[aria-selected="true"] .name { color: var(--text); }
+  .results mark { background: transparent; color: var(--text); font-weight: 600; }
+  .results .none { color: var(--faint); cursor: default; overflow-wrap: anywhere; height: auto; padding: 12px 14px; }
+  .hints {
+    display: flex; gap: 16px; padding: 10px 14px 4px; margin-top: 6px; flex-shrink: 0;
+    color: var(--faint); font-size: 12px; box-shadow: inset 0 1px 0 var(--hairline);
+  }
+  .hints span { display: inline-flex; align-items: center; gap: 4px; }
+  .hints kbd { min-width: 20px; height: 20px; font-size: 11px; }
+
+  /* ---------- loading: the final frame with one quiet status, no shimmer, no entrance ---------- */
+  .booting {
+    position: fixed; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 20px 0 16px; border-radius: 999px;
+    color: var(--muted); font-weight: 500; white-space: nowrap;
+  }
+  .booting .swatch { background: var(--accent); }
 
   /* ---------- whole-screen states ---------- */
   .state {
-    position: fixed; z-index: 1; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: min(520px, calc(100vw - 32px)); padding: 28px; max-height: calc(100dvh - 120px); overflow: auto;
+    position: fixed; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(520px, calc(100vw - 2 * var(--edge-gap))); max-height: calc(100dvh - 160px);
+    display: flex; flex-direction: column; padding: 28px 22px 22px 28px; border-radius: 24px;
   }
   .state h2 { margin: 0 0 8px; font-size: 20px; line-height: 26px; font-weight: 600; }
   .state p { margin: 0 0 12px; color: var(--muted); }
   .state code { font: 500 13px/20px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text);
-    background: var(--raised); padding: 2px 8px; border-radius: 6px; overflow-wrap: anywhere; }
-  .state ul { margin: 12px 0 0; padding: 0; list-style: none; }
-  .state li { padding: 6px 0; display: flex; gap: 10px; align-items: center; overflow-wrap: anywhere; }
-  .state li + li { border-top: 1px solid var(--raised); }
+    background: var(--fill-hover); box-shadow: var(--edge); padding: 2px 8px; border-radius: 6px; overflow-wrap: anywhere; }
+  .state ul { margin: 8px 0 0; padding: 0 6px 0 0; list-style: none; min-height: 0; }
+  .state li { padding: 7px 0; display: flex; gap: 10px; align-items: center; overflow-wrap: anywhere; }
+  .state li + li { box-shadow: inset 0 1px 0 var(--hairline); }
 
   @media (hover: hover) and (pointer: fine) {
-    .legend button:hover, .hop:hover { background: var(--raised); }
-    .tool[aria-pressed="false"]:hover, .tool:not([aria-pressed]):hover, .close:hover { background: var(--active); }
-    .search:hover { color: var(--muted); }
+    .tool:hover .tip { opacity: 1; transform: translate(-50%, 0) scale(1); transition-duration: 125ms; transition-delay: 350ms; }
+    .tool:last-child:hover .tip { transform: none; }
+    .tool:hover { color: var(--text); }
+    .legend-rows button:hover, .hop:hover, .tool[aria-pressed="false"]:hover, .tool:not([aria-pressed]):hover,
+    .close:hover, .link:hover { background: var(--fill-active); }
+    .search:hover { box-shadow: var(--edge-strong), var(--float); color: var(--muted); }
+    .pill-warning:hover { background: rgba(229, 169, 59, 0.22); }
   }
-  .legend button:active, .tool:active, .hop:active, .close:active, .search:active, .pill-warning:active { transform: scale(0.97); }
+  .legend-rows button:active, .tool:active, .hop:active, .close:active, .search:active, .pill-warning:active, .link:active { transform: scale(0.97); }
 
+  /* As the window narrows: the top bar drops the question sentence, then the toolbar drops its
+     keycaps and finally its names - the controls themselves always stay on screen. */
+  @media (max-width: 1000px) { .question, .brand .sep { display: none; } .search { width: 240px; } }
   @media (max-width: 720px) {
-    .question, .search span, .search kbd { display: none; }
-    .search { width: var(--control-height); padding: 0; justify-content: center; }
-    .bar { padding-inline: 16px; gap: 12px; }
+    :root { --edge-gap: 10px; }
+    .search .ph, .search .keys { display: none; }
+    .search { width: 48px; padding: 0; justify-content: center; }
     .legend { display: none; }
-    .sheet { top: auto; left: 16px; right: 16px; width: auto; max-height: 55dvh;
-      transform: translateY(calc(100% + 24px)); }
-    .tools { left: 16px; right: 16px; justify-content: center; }
+    .sheet { top: auto; left: var(--edge-gap); right: var(--edge-gap); width: auto; max-height: 55dvh;
+      bottom: calc(2 * var(--edge-gap) + 1rem + 48px + env(safe-area-inset-bottom, 0px));
+      transform: translateY(calc(100% + 96px)); }
   }
   @media (prefers-reduced-motion: reduce) {
+    .tool .tip, .tool:last-child .tip, .tool:hover .tip, .tool:focus-visible .tip { transform: translate(-50%, 0); }
+    .tool:last-child .tip, .tool:last-child:hover .tip, .tool:last-child:focus-visible .tip { transform: none; }
     .sheet, .sheet.open { transform: none; transition: opacity 160ms ease, visibility 0s linear 160ms; }
     .sheet.open { transition: opacity 160ms ease, visibility 0s; }
   }
+  /* Without blur (old engines, reduced transparency, more contrast) every weight becomes a solid surface. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass, .glass-thin, .glass-thick { background: var(--solid); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass, .glass-thin, .glass-thick { background: var(--solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .ambient { display: none; }
+    .label { background: var(--solid); }
+  }
   @media (prefers-contrast: more) {
-    :root { --muted: #d6d6d6; --faint: #bdbdbd; }
-    .card, .tools, .palette { box-shadow: inset 0 0 0 1px #5a5a5a; }
+    :root { --muted: #e2e3e6; --faint: #c8cad0; --edge: inset 0 0 0 1px #6a6a6a; --hairline: #4a4a4a; }
+    .glass, .glass-thin, .glass-thick { background: var(--solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   }
 </style>
 </head>
 <body>
-<header class="bar">
-  <div class="brand">
+<div class="ambient" aria-hidden="true"><i></i><i></i></div>
+<header class="top">
+  <div class="brand glass">
     <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
       <path d="M5 16.5 11 5.5l6 11" fill="none" stroke="#c6f24e" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M5 16.5h12" fill="none" stroke="#c6f24e" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
       <circle cx="11" cy="5.5" r="2.6" fill="#c6f24e"/><circle cx="5" cy="16.5" r="2.6" fill="#e6e6e6"/><circle cx="17" cy="16.5" r="2.6" fill="#e6e6e6"/>
     </svg>
     <h1 id="title">__TITLE__</h1>
+    <span class="sep" aria-hidden="true"></span>
+    <span class="question" id="question"></span>
+    <button class="pill-warning num" id="undeclared" hidden></button>
   </div>
-  <span class="question" id="question"></span>
-  <button class="pill-warning num" id="undeclared" hidden></button>
   <span class="spacer"></span>
-  <button class="search" id="open-search" aria-label="Search concepts" aria-keyshortcuts="/ Control+K Meta+K">
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m10.5 10.5 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <span>Search concepts</span><kbd>/</kbd>
+  <button class="search glass-thin" id="open-search" aria-label="Search concepts" aria-keyshortcuts="/ Control+K Meta+K">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m12 12 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <span class="ph">Search concepts</span>
+    <span class="keys"><kbd id="k-mod">Ctrl</kbd><kbd>K</kbd></span>
   </button>
 </header>
 
 <main id="stage" aria-label="3D knowledge graph"></main>
 
-<nav class="legend card" id="legend" aria-label="Concept types" hidden><h2>Types</h2><div id="legend-rows"></div></nav>
+<nav class="legend glass" id="legend" aria-label="Concept types" hidden>
+  <div class="pane-head"><h2>Types</h2><span class="total num" id="legend-total"></span><span class="spacer"></span>
+    <button class="link" id="legend-all" hidden>Show all</button></div>
+  <div class="legend-rows scroll" id="legend-rows"></div>
+</nav>
 
-<div class="tools" id="tools" role="toolbar" aria-label="View" hidden>
-  <button class="tool" id="t-labels" aria-pressed="true">Labels</button>
-  <button class="tool" id="t-rotate" aria-pressed="false">Rotate</button>
-  <button class="tool" id="t-fit" aria-keyshortcuts="F">Fit</button>
+
+<div class="tools glass" id="tools" role="toolbar" aria-label="View" hidden>
+  <button class="tool" id="t-labels" aria-label="Hide labels" aria-keyshortcuts="L">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h7l4 4.5-4 4.5h-7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path id="t-labels-off" d="M2 14 14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" hidden/></svg>
+    <span class="tip" id="t-labels-text" aria-hidden="true">Hide labels</span>
+  </button>
+  <button class="tool" id="t-rotate" aria-label="Auto-rotate" aria-pressed="false" aria-keyshortcuts="R">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11.5 1v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tip" aria-hidden="true">Auto-rotate</span>
+  </button>
+  <button class="tool" id="t-fit" aria-label="Center" aria-keyshortcuts="C F">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    <span class="tip" aria-hidden="true">Center</span>
+  </button>
 </div>
 
-<aside class="sheet card" id="sheet" aria-label="Concept details" inert>
+<aside class="sheet glass" id="sheet" aria-label="Concept details" inert>
   <div class="sheet-head">
     <div>
       <div class="kind"><span class="swatch" id="d-swatch"></span><span id="d-type"></span></div>
       <h2 id="d-name"></h2>
       <div class="meta num" id="d-meta"></div>
     </div>
-    <button class="close" id="d-close" aria-label="Close details">
+    <button class="close chip" id="d-close" aria-label="Close details">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     </button>
   </div>
-  <section id="d-obs-wrap"><h3>Observations</h3><ul class="obs" id="d-obs"></ul></section>
-  <section id="d-rel-wrap"><h3>Relations</h3><div id="d-rels"></div></section>
+  <div class="sheet-body scroll" id="sheet-body">
+    <section id="d-obs-wrap"><h3>Observations</h3><ul class="obs" id="d-obs"></ul></section>
+    <section id="d-rel-wrap"><h3>Relations</h3><div id="d-rels"></div></section>
+  </div>
 </aside>
 
 <div class="scrim" id="scrim" hidden></div>
-<div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="Search concepts" hidden>
-  <input id="q" type="text" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list"
-         placeholder="Search concepts by name or type" autocomplete="off" spellcheck="false">
-  <ul class="results" id="results" role="listbox"></ul>
+<div class="palette glass-thick" id="palette" role="dialog" aria-modal="true" aria-label="Search concepts" hidden>
+  <div class="field">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m12 12 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <input id="q" type="text" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list"
+           placeholder="Search concepts by name or type" autocomplete="off" spellcheck="false">
+    <kbd>Esc</kbd>
+  </div>
+  <div class="results-head"><span>Concepts</span><span class="num" id="r-count"></span></div>
+  <ul class="results scroll" id="results" role="listbox"></ul>
+  <div class="hints" aria-hidden="true"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
 </div>
 
-<div class="state card" id="state" hidden></div>
+<div class="state glass" id="state" hidden></div>
+<div class="booting glass" id="booting" role="status" hidden><span class="swatch" aria-hidden="true"></span><span id="booting-text">Loading the 3D view…</span></div>
 
 <script id="kg-data" type="application/json">__DATA__</script>
 <script type="importmap">
@@ -315,7 +461,14 @@ const ALIASES = { aggregateroot: "aggregate", vo: "valueobject", value: "valueob
 const NEUTRALS = ["#8a8a8a", "#6b6b6b", "#a3a3a3", "#5c5c5c"];
 // "BoundedContext" / "value_object" -> "Bounded context" / "Value object": the project's word, set as a label.
 const humanize = (t) => { const s = String(t).replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
-const kindKey = (t) => { const k = String(t).toLowerCase().replace(/[\s_-]+/g, ""); return ALIASES[k] || k; };
+// Kinds often carry notes: "Entity (aggregate root)" is an aggregate; "Value Object (imutável)" and
+// "Actor / Entity" keep only the DDD kind, so qualifiers don't push a concept into neutral grey.
+const kindKey = (t) => {
+  const s = String(t).toLowerCase();
+  if (s.includes("aggregate")) return "aggregate";
+  const k = s.replace(/\(.*?\)/g, "").split("/").pop().replace(/[\s_-]+/g, "");
+  return ALIASES[k] || k;
+};
 const typeStyle = {};
 let neutralIx = 0;
 for (const t of [...new Set(DATA.nodes.map((n) => n.type))].sort()) {
@@ -348,6 +501,23 @@ if (undeclared) {
   u.addEventListener("click", () => window.openPalette?.("undeclared"));
 }
 
+// Scroll containers fade at whichever edge still has content past it (an Apple scroll-edge effect
+// instead of a hard cut), so a list inside glass never ends mid-row against the radius.
+function watchFades(box) {
+  const update = () => {
+    box.classList.toggle("fade-top", box.scrollTop > 1);
+    box.classList.toggle("fade-bottom", box.scrollTop + box.clientHeight < box.scrollHeight - 1);
+  };
+  box.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(box);
+  new MutationObserver(update).observe(box, { childList: true, subtree: true });
+  update();
+  return update;
+}
+
+// The shortcut reads the way this keyboard writes it.
+$("k-mod").textContent = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl";
+
 function swatchFor(type) {
   const s = el("span", "swatch");
   const st = typeStyle[type];
@@ -366,13 +536,15 @@ function showState(title, lines, listNodes) {
     return p;
   }));
   if (listNodes) {
-    const ul = el("ul");
+    const ul = el("ul", "scroll");
     for (const n of [...listNodes].sort((a, b) => typeStyle[a.type].rank - typeStyle[b.type].rank || a.id.localeCompare(b.id))) {
       const li = el("li"); li.append(swatchFor(n.type), el("span", null, n.id), el("span", "meta", typeStyle[n.type].label)); ul.append(li);
     }
     box.append(ul);
+    watchFades(ul);
   }
   box.hidden = false;
+  $("booting").hidden = true;
   $("open-search").hidden = $("undeclared").hidden = true;   // nothing to search or open in a whole-screen state
 }
 
@@ -382,7 +554,10 @@ if (concepts === 0) {
     ["It re-renders this page after every change; to refresh it by hand run ", { code: "python .claude/scripts/render-graph.py" }, "."],
   ]);
 } else {
-  boot().catch((err) => {
+  const booting = $("booting");
+  booting.hidden = false;
+  $("booting-text").textContent = `Loading the 3D view of ${count(concepts, "concept", "concepts")}…`;
+  boot().then(() => { booting.hidden = true; }).catch((err) => {
     console.error(err);
     showState("The 3D view couldn't load", [
       ["It needs network access to fetch three.js and 3d-force-graph from esm.sh, and a browser with WebGL."],
@@ -397,7 +572,7 @@ async function boot() {
   const { CSS2DRenderer, CSS2DObject } = await import("three/examples/jsm/renderers/CSS2DRenderer.js");
   const { default: ForceGraph3D } = await import("3d-force-graph");
 
-  const ground = new THREE.Color("#0c0d0f");
+  const ground = new THREE.Color("#0a0b0d");
   const halo = (() => {                      // the glow lives in a texture on the data marks only
     const c = document.createElement("canvas"); c.width = c.height = 128;
     const g = c.getContext("2d"), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -471,7 +646,7 @@ async function boot() {
   labelLayer.domElement.classList.add("labels");
   const Graph = new ForceGraph3D(stage, { controlType: "orbit", extraRenderers: [labelLayer] })
     .width(stage.clientWidth).height(stage.clientHeight)
-    .backgroundColor("#0c0d0f")
+    .backgroundColor("rgba(0,0,0,0)")   // transparent: the ambient light shows through
     .showNavInfo(false)
     // Node dragging off: an explorer doesn't need it, and the library's drag-end handler calls an
     // OrbitControls internal (_onPointerCancel) that throws on a plain click with three r186.
@@ -555,8 +730,12 @@ async function boot() {
     // Frame the 90th-percentile radius so one stray node doesn't shrink the whole model.
     const d = nodes.map((n) => c.distanceTo(new THREE.Vector3(n.x, n.y, n.z))).sort((a, b) => a - b);
     const radius = Math.max(20, d[Math.floor((d.length - 1) * 0.9)]);
+    // Frame the space the floating panes leave free: the top islands and the bottom toolbar/legend
+    // each take a band, so the model is fitted into the height between them.
     const cam = Graph.camera();
-    const half = Math.tan((cam.fov * Math.PI) / 360) * Math.min(1, stage.clientWidth / stage.clientHeight);
+    const w = stage.clientWidth, h = stage.clientHeight, band = 72;
+    const tanV = Math.tan((cam.fov * Math.PI) / 360);
+    const half = Math.min(tanV * Math.max(0.3, (h - 2 * band) / h), tanV * (w / h) * ((w - 2 * 16) / w));
     const dist = (radius + 12) / half;
     const dir = cam.position.clone().sub(controls.target);
     if (dir.lengthSq() < 1) dir.set(0, 0, 1);
@@ -564,11 +743,39 @@ async function boot() {
     fly(c.clone().add(dir.normalize().multiplyScalar(dist)), c, ms);
   }
 
+  // With the sheet open, shift the projection so the scene centres in the space the sheet leaves
+  // (left of it on a desktop, above it on a phone), moving with the sheet - same duration and
+  // curve - instead of jumping.
+  const easeOut = bezier(0.23, 1, 0.32, 1);
+  let shift = { x: 0, y: 0 }, shiftRun = 0;
+  const applyShift = () => {
+    const cam = Graph.camera(), w = stage.clientWidth, h = stage.clientHeight;
+    if (Math.abs(shift.x) < 0.5 && Math.abs(shift.y) < 0.5) cam.clearViewOffset();
+    else cam.setViewOffset(w, h, shift.x, shift.y, w, h);
+  };
+  function shiftTo(target, ms) {
+    const from = { ...shift }, id = ++shiftRun, t0 = performance.now();
+    if (!ms || reduceMotion.matches) { shift = target; applyShift(); return; }
+    const step = (now) => {
+      if (id !== shiftRun) return;
+      const k = easeOut(Math.min(1, (now - t0) / ms));
+      shift = { x: from.x + (target.x - from.x) * k, y: from.y + (target.y - from.y) * k }; applyShift();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const sheetShift = () => {
+    if (!selected) return { x: 0, y: 0 };
+    return innerWidth > 720 ? { x: (sheet.offsetWidth + 12) / 2, y: 0 } : { x: 0, y: (sheet.offsetHeight + 12) / 2 };
+  };
+
   function select(n) {
     framing = false;
+    const wasOpen = !!selected;
     selected = n || null;
     paint();
     renderSheet();
+    if (!!selected !== wasOpen) shiftTo(sheetShift(), selected ? 240 : 180);
     if (n) {
       const p = new THREE.Vector3(n.x, n.y, n.z);
       const cam = Graph.camera();
@@ -609,12 +816,15 @@ async function boot() {
       }
       rels.append(g);
     }
-    sheet.scrollTop = 0;
+    $("sheet-body").scrollTop = 0;
   }
   $("d-close").addEventListener("click", () => select(null));
 
   // ---------- legend ----------
   const rows = $("legend-rows");
+  const showAll = $("legend-all");
+  $("legend-total").textContent = fmt.format(concepts);
+  showAll.addEventListener("click", () => { for (const t of [...hiddenTypes]) rows.children[types.indexOf(t)]?.click(); });
   const types = Object.keys(typeStyle).sort((a, b) => typeStyle[a].rank - typeStyle[b].rank || a.localeCompare(b));
   for (const t of types) {
     const b = el("button");
@@ -627,19 +837,34 @@ async function boot() {
       if (selected && hiddenTypes.has(selected.type)) select(null);
       Graph.nodeVisibility(Graph.nodeVisibility()).linkVisibility(Graph.linkVisibility());
       for (const n of DATA.nodes) if (n.__parts) n.__parts.label.style.visibility = hiddenTypes.has(n.type) ? "hidden" : "";
+      showAll.hidden = !hiddenTypes.size;
     });
     rows.append(b);
   }
   $("legend").hidden = false;
+  watchFades(rows);
+  watchFades($("sheet-body"));
+  watchFades($("results"));
 
   // ---------- toolbar ----------
+  // Labels is an action whose name says what it will do ("Hide labels" / "Show labels"), so it
+  // carries no pressed state; Auto-rotate is a real toggle. Rotation is opt-in, so it stays
+  // available with reduced motion - just slower.
   const tLabels = $("t-labels"), tRotate = $("t-rotate");
-  tLabels.addEventListener("click", () => { showLabels = !showLabels; tLabels.setAttribute("aria-pressed", String(showLabels)); paint(); });
-  tRotate.addEventListener("click", () => {
-    controls.autoRotate = !controls.autoRotate && !reduceMotion.matches;
+  const toggleLabels = () => {
+    showLabels = !showLabels;
+    $("t-labels-text").textContent = showLabels ? "Hide labels" : "Show labels";
+    tLabels.setAttribute("aria-label", $("t-labels-text").textContent);
+    $("t-labels-off").toggleAttribute("hidden", showLabels);   // SVG elements have no .hidden property
+    paint();
+  };
+  const toggleRotate = () => {
+    controls.autoRotate = !controls.autoRotate;
+    controls.autoRotateSpeed = reduceMotion.matches ? 0.2 : 0.5;
     tRotate.setAttribute("aria-pressed", String(controls.autoRotate));
-  });
-  if (reduceMotion.matches) tRotate.hidden = true;
+  };
+  tLabels.addEventListener("click", toggleLabels);
+  tRotate.addEventListener("click", toggleRotate);
   $("t-fit").addEventListener("click", () => fit(600));
   $("tools").hidden = false;
 
@@ -654,19 +879,28 @@ async function boot() {
   function closePalette() { palette.hidden = scrim.hidden = true; lastFocus?.focus?.(); }
   function search() {
     const term = q.value.trim().toLowerCase();
-    matches = DATA.nodes.filter((n) => !term || n.id.toLowerCase().includes(term) || typeStyle[n.type].label.toLowerCase().includes(term))
-      .sort((a, b) => (b.id.toLowerCase().startsWith(term) - a.id.toLowerCase().startsWith(term)) || degree(b) - degree(a))
-      .slice(0, 8);
+    const all = DATA.nodes.filter((n) => !term || n.id.toLowerCase().includes(term) || typeStyle[n.type].label.toLowerCase().includes(term))
+      .sort((a, b) => (b.id.toLowerCase().startsWith(term) - a.id.toLowerCase().startsWith(term)) || degree(b) - degree(a));
+    matches = all.slice(0, 8);
+    $("r-count").textContent = !all.length ? "" : all.length > matches.length ? `${fmt.format(matches.length)} of ${fmt.format(all.length)}` : count(all.length, "match", "matches");
     active = 0;
     results.replaceChildren(...(matches.length ? matches.map((n, i) => {
       const li = el("li");
       li.id = `opt-${i}`; li.setAttribute("role", "option");
-      li.append(swatchFor(n.type), el("span", "name", n.id), el("span", "type", typeStyle[n.type].label));
+      li.append(swatchFor(n.type), highlighted(n.id, term), el("span", "type", typeStyle[n.type].label));
       li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(i); });
       li.addEventListener("pointermove", () => mark(i));
       return li;
     }) : [el("li", "none", `No concept matches “${q.value.trim()}”.`)]));
     mark(0);
+  }
+  // The typed part of a name, set in <mark> - built from text nodes, never from HTML.
+  function highlighted(name, term) {
+    const span = el("span", "name");
+    const at = term ? name.toLowerCase().indexOf(term) : -1;
+    if (at < 0) { span.textContent = name; return span; }
+    span.append(name.slice(0, at), el("mark", null, name.slice(at, at + term.length)), name.slice(at + term.length));
+    return span;
   }
   function mark(i) {
     active = i;
@@ -693,10 +927,15 @@ async function boot() {
     const typing = e.target instanceof HTMLInputElement;
     if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); openPalette(); }
     else if (e.key === "Escape") { if (!palette.hidden) closePalette(); else if (selected) select(null); }
-    else if (!typing && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "f") fit(600);
+    else if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "f" || k === "c") fit(600);
+      else if (k === "l") toggleLabels();
+      else if (k === "r") toggleRotate();
+    }
   });
 
-  addEventListener("resize", () => Graph.width(stage.clientWidth).height(stage.clientHeight));
+  addEventListener("resize", () => { Graph.width(stage.clientWidth).height(stage.clientHeight); shift = sheetShift(); applyShift(); });
 
   // Labels never sit on each other: a few times a second, keep the most important label in each spot
   // (the hovered or selected concept, then its neighbours, then by degree) and hide the ones it covers.
