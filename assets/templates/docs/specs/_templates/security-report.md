@@ -12,6 +12,7 @@ What was reviewed (feature/area, commit or PR range).
 | Input validation & injection | | |
 | Secrets & dependencies / supply-chain | | |
 | Infra & config | | |
+| Database access control (roles, privilege matrix, no runtime DDL, TLS) | | |
 | API security | | |
 | Business-logic abuse | | |
 | Compliance (see CLAUDE.md) | | |

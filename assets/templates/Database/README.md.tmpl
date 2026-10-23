@@ -11,10 +11,12 @@ This folder is the single, authoritative source of truth for **{{PROJECT_NAME}}*
   - `primary-keys/<name>.md`
   - `packages/<name>.md`
   - `functions/<name>.md`
+  - `roles/<role_name>.md` plus `roles/privilege-matrix.md` - who may connect and what each role may do
 
 Each per-object file is a design description (columns/types/constraints, source/target, signature, purpose, side effects) - see the `README.md` in each subfolder for its exact convention.
 
 ## Non-negotiable rules
 - **Static design artifacts only.** No real connection string, no credentials, no dump or sample of real data. See `docs/security-policy.md` / `CLAUDE.md` - agents never access the system database, and that includes never generating a file here from a live query.
 - A feature's own `docs/specs/<feature>/design.md` ("Feature diagram" section) only ever covers the entities/tables that feature touches. The complete, cross-feature picture lives only here, in `er-diagram.md`.
+- **Access control is part of the schema.** Every project with a database defines its roles and a per-object privilege matrix in `roles/` (baseline in `roles/README.md`): the application never connects as a superuser or as the schema owner, never runs DDL or migrations at runtime, and gets only the operations its use cases need. A table added without its matrix rows is an incomplete design.
 - Owned by the `architect` agent: every feature that touches the database updates this folder as part of phase 3, after `design.md` is approved - never silently, and never by deleting another feature's objects without the user's confirmation.

@@ -22,7 +22,7 @@ OPTIONAL_AGENTS = ["designer", "frontend", "ui-reviewer"]   # generated only whe
 UI_SKILL = "frontend-craft"
 UI_SKILL_REFS = ["art-direction.md", "app-screens.md", "materials-type.md", "motion.md", "worst-case.md", "review.md"]
 SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
-DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]
+DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions", "roles"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
              "Bash(docker exec:*)", "Bash(aws secretsmanager get-secret-value:*)",
              "Read(./.env)", "Read(./.env.*)"]

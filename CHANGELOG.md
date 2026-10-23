@@ -2,6 +2,22 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-23 (2)
+
+**Database access control is now part of the generated design, not left implicit.** In a real project, a review of the database rules found no roles or privileges defined anywhere: nothing said which user the application connects as, who applies migrations, or what each component may do. The Docker Compose file an agent then wrote connected the API as the cluster superuser (`POSTGRES_USER`), because nothing in the scaffold asked for anything else.
+
+- **New `Database/roles/` folder** (generated with the rest of `Database/`):
+  - its `README.md` sets the convention: one file per role, plus a project-wide `privilege-matrix.md`;
+  - it also carries the baseline every project starts from: bootstrap superuser for administration only; NOLOGIN owner plus a human-run migrator for DDL; a least-privilege runtime app role with no DDL and no migrations at startup; hardening (revoke PUBLIC, default privileges, fixed `search_path`); per-role timeouts and connection limits; TLS outside local dev; an explicit row-level-security decision; role scripts generated only as files, with passwords from the environment.
+- **`Database/README.md`:** lists `roles/` and adds the non-negotiable that access control is part of the schema.
+- **`architect`:** owns roles and the matrix, writes a new "Database access control" section in `design.md`, and reviews local-dev topology (Compose) against it.
+- **`design.md` template:** gains that section. The threat-model section names the database threats to cover: compromised app process, runtime DDL, no TLS, long queries, and backups keeping deleted personal data.
+- **`security` agent and `security-report.md`:** gain a "Database access control" check, done by static review only.
+- **`docs/security-policy.md` (template) and `references/security-policy.md`:** new section "System database access control". It also states that `.env.example` is written by a human, because the guard's deny rules cover every `.env*` path, including the example.
+- **`verify_setup.py`:** requires `Database/roles/README.md` when the project has a database.
+- **Tests:** one new test checks that the baseline is generated, substituted and wired into the design template, the policy, the security report and both agents. The existing `Database/` test now covers `roles/`. The new test fails without the template changes. The suite has 65 tests, all passing.
+- **Projects scaffolded before this change:** they don't get the folder automatically. Render `assets/templates/Database/roles/README.md.tmpl` into `Database/roles/README.md`, then copy the changed sections of the other templates listed above.
+
 ## 2026-10-23
 
 **`render-graph.py` also writes `graph.md` as an export of `graph.jsonl`.** In a real project, the stale fallback `graph.md` kept looking like a second source of truth next to `graph.jsonl`. The user asked for it to be regenerated from the graph, but nothing in the scaffold could do that, so the agent wrote a one-off script that would leave the file stale again after the next graph change.

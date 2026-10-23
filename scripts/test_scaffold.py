@@ -220,8 +220,30 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue((self.target / "Database" / "README.md").is_file())
         self.assertTrue((self.target / "Database" / "er-diagram.md").is_file())
-        for kind in ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]:
+        for kind in ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions", "roles"]:
             self.assertTrue((self.target / "Database" / kind / "README.md").is_file(), kind)
+
+    def test_database_access_control_baseline_is_generated_and_wired(self):
+        r = run_scaffold(self.target, base_answers(DB_ENGINE="postgresql"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        roles = (self.target / "Database" / "roles" / "README.md").read_text(encoding="utf-8")
+        for needle in ["privilege-matrix.md", "Bootstrap/admin superuser", "Runtime app role",
+                       "no DDL", "REVOKE ALL ON DATABASE", "ALTER DEFAULT PRIVILEGES",
+                       "statement_timeout", "verify-full", "Row-level security"]:
+            self.assertIn(needle, roles, needle)
+        self.assertNotIn("{{", roles)
+        db_readme = (self.target / "Database" / "README.md").read_text(encoding="utf-8")
+        self.assertIn("`roles/<role_name>.md`", db_readme)
+        self.assertIn("**Access control is part of the schema.**", db_readme)
+        design = (self.target / "docs" / "specs" / "_templates" / "design.md").read_text(encoding="utf-8")
+        self.assertIn("## Database access control", design)
+        policy = (self.target / "docs" / "security-policy.md").read_text(encoding="utf-8")
+        self.assertIn("## System database access control", policy)
+        report = (self.target / "docs" / "specs" / "_templates" / "security-report.md").read_text(encoding="utf-8")
+        self.assertIn("Database access control", report)
+        for agent in ("architect", "security"):
+            body = (self.target / ".claude" / "agents" / f"{agent}.md").read_text(encoding="utf-8")
+            self.assertIn("Database access control", body, agent)
 
     def test_db_engine_none_omits_database_folder(self):
         answers = base_answers(DB_ENGINE="none")
