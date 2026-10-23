@@ -190,18 +190,27 @@
   /* ---------- toolbar ---------- */
   .tools {
     position: fixed; z-index: 2; right: var(--edge-gap); bottom: calc(var(--edge-gap) + 1rem + env(safe-area-inset-bottom, 0px));
-    display: flex; gap: 2px; height: 48px; padding: 4px; border-radius: 16px; white-space: nowrap;
+    display: flex; gap: 2px; padding: 4px; border-radius: 999px;
   }
   .tool {
-    display: inline-flex; align-items: center; gap: 8px;
-    height: 40px; padding: 0 14px 0 12px; border: 0; border-radius: 12px;
-    background: transparent; color: var(--text); font-weight: 500;
+    position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+    border: 0; border-radius: 999px; background: transparent; color: var(--muted);
     transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease;
   }
-  .tool svg { flex-shrink: 0; }
-  .tool kbd { margin-left: 2px; min-width: 20px; height: 20px; font-size: 11px; }
-  .tool[aria-pressed="true"] kbd { color: #3a3a3a; background: rgba(0, 0, 0, 0.08); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
-  .tool[aria-pressed="true"] { background: var(--text); color: #000; }   /* primary by inversion */
+  .tool svg { display: block; }
+  .tool[aria-pressed="true"] { background: var(--fill-active); color: var(--text); box-shadow: inset 0 0 0 1px var(--hairline); }
+  /* The name, shown on hover or keyboard focus: a small tooltip above the button, after a short
+     delay so passing over the bar doesn't flash it; it leaves at once. */
+  .tool .tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; pointer-events: none; white-space: nowrap;
+    padding: 4px 9px; border-radius: 8px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--text);
+    background: rgba(15, 17, 21, 0.92); box-shadow: var(--edge), 0 4px 12px rgba(0, 0, 0, 0.3);
+    opacity: 0; transform: translate(-50%, 4px) scale(0.97); transform-origin: 50% 100%;
+    transition: opacity 100ms ease, transform 100ms var(--ease-out);
+  }
+  .tool:focus-visible .tip { opacity: 1; transform: translate(-50%, 0) scale(1); transition-duration: 125ms; }
+  .tool:last-child .tip { left: auto; right: 0; transform: translate(0, 4px) scale(0.97); transform-origin: 100% 100%; }
+  .tool:last-child:focus-visible .tip { transform: none; }
 
   /* ---------- detail sheet: in from the right, out the same way, faster ---------- */
   .sheet {
@@ -298,6 +307,9 @@
   .state li + li { box-shadow: inset 0 1px 0 var(--hairline); }
 
   @media (hover: hover) and (pointer: fine) {
+    .tool:hover .tip { opacity: 1; transform: translate(-50%, 0) scale(1); transition-duration: 125ms; transition-delay: 350ms; }
+    .tool:last-child:hover .tip { transform: none; }
+    .tool:hover { color: var(--text); }
     .legend-rows button:hover, .hop:hover, .tool[aria-pressed="false"]:hover, .tool:not([aria-pressed]):hover,
     .close:hover, .link:hover { background: var(--fill-active); }
     .search:hover { box-shadow: var(--edge-strong), var(--float); color: var(--muted); }
@@ -307,8 +319,7 @@
 
   /* As the window narrows: the top bar drops the question sentence, then the toolbar drops its
      keycaps and finally its names - the controls themselves always stay on screen. */
-  @media (max-width: 1000px) { .question, .brand .sep { display: none; } .search { width: 240px; } .tool kbd { display: none; } }
-  @media (max-width: 600px) { .tool span { display: none; } .tool { padding: 0; width: 40px; justify-content: center; } }
+  @media (max-width: 1000px) { .question, .brand .sep { display: none; } .search { width: 240px; } }
   @media (max-width: 720px) {
     :root { --edge-gap: 10px; }
     .search .ph, .search .keys { display: none; }
@@ -319,6 +330,8 @@
       transform: translateY(calc(100% + 96px)); }
   }
   @media (prefers-reduced-motion: reduce) {
+    .tool .tip, .tool:last-child .tip, .tool:hover .tip, .tool:focus-visible .tip { transform: translate(-50%, 0); }
+    .tool:last-child .tip, .tool:last-child:hover .tip, .tool:last-child:focus-visible .tip { transform: none; }
     .sheet, .sheet.open { transform: none; transition: opacity 160ms ease, visibility 0s linear 160ms; }
     .sheet.open { transition: opacity 160ms ease, visibility 0s; }
   }
@@ -369,17 +382,17 @@
 
 
 <div class="tools glass" id="tools" role="toolbar" aria-label="View" hidden>
-  <button class="tool" id="t-labels" aria-label="Hide labels" aria-keyshortcuts="L" title="Hide or show the names on the graph (L)">
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h7l4 4.5-4 4.5h-7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path id="t-labels-off" d="M2 14 14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" hidden/></svg>
-    <span id="t-labels-text">Hide labels</span><kbd>L</kbd>
+  <button class="tool" id="t-labels" aria-label="Hide labels" aria-keyshortcuts="L">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h7l4 4.5-4 4.5h-7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path id="t-labels-off" d="M2 14 14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" hidden/></svg>
+    <span class="tip" id="t-labels-text" aria-hidden="true">Hide labels</span>
   </button>
-  <button class="tool" id="t-rotate" aria-label="Auto-rotate" aria-pressed="false" aria-keyshortcuts="R" title="Turn the graph slowly on its own (R)">
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11.5 1v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Auto-rotate</span><kbd>R</kbd>
+  <button class="tool" id="t-rotate" aria-label="Auto-rotate" aria-pressed="false" aria-keyshortcuts="R">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11.5 1v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tip" aria-hidden="true">Auto-rotate</span>
   </button>
-  <button class="tool" id="t-fit" aria-label="Center" aria-keyshortcuts="C F" title="Center the whole graph in view (C)">
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-    <span>Center</span><kbd>C</kbd>
+  <button class="tool" id="t-fit" aria-label="Center" aria-keyshortcuts="C F">
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    <span class="tip" aria-hidden="true">Center</span>
   </button>
 </div>
 
