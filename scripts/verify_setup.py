@@ -102,7 +102,8 @@ def main() -> None:
     for f in ["CLAUDE.md", "AGENTS.md", "docs/glossary.md", "docs/specs/README.md",
               "docs/specs/STATUS.md", "docs/specs/STATUS-archive.md",
               "docs/adr/0000-template.md", "docs/knowledge-graph/README.md",
-              "docs/test-strategy.md", "docs/debugging-protocol.md"]:
+              "docs/test-strategy.md", "docs/debugging-protocol.md",
+              "docs/security-policy.md"]:
         check((t / f).is_file(), f"exists: {f}")
 
     traceability = t / ".claude" / "scripts" / "check-traceability.py"

@@ -21,7 +21,7 @@ Scenario: <name>
 ## Non-functional requirements
 - **Performance**: target latency (p50/p95/p99), expected throughput.
 - **Availability**: SLO/uptime target, acceptable downtime.
-- **Security**: see `security-policy.md` and the `security` agent's checklist.
+- **Security**: see `docs/security-policy.md` and the `security` agent's checklist.
 - **Privacy/compliance**: per the project's `COMPLIANCE` answer.
 - **Accessibility**: WCAG level, if `HAS_UI`.
 - **Observability**: what must be logged/traced/alerted on for this feature.

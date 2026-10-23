@@ -15,6 +15,6 @@ This folder is the single, authoritative source of truth for **{{PROJECT_NAME}}*
 Each per-object file is a design description (columns/types/constraints, source/target, signature, purpose, side effects) - see the `README.md` in each subfolder for its exact convention.
 
 ## Non-negotiable rules
-- **Static design artifacts only.** No real connection string, no credentials, no dump or sample of real data. See `references/security-policy.md` / `CLAUDE.md` - agents never access the system database, and that includes never generating a file here from a live query.
+- **Static design artifacts only.** No real connection string, no credentials, no dump or sample of real data. See `docs/security-policy.md` / `CLAUDE.md` - agents never access the system database, and that includes never generating a file here from a live query.
 - A feature's own `docs/specs/<feature>/design.md` ("Feature diagram" section) only ever covers the entities/tables that feature touches. The complete, cross-feature picture lives only here, in `er-diagram.md`.
 - Owned by the `architect` agent: every feature that touches the database updates this folder as part of phase 3, after `design.md` is approved - never silently, and never by deleting another feature's objects without the user's confirmation.
