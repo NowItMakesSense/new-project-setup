@@ -2,6 +2,19 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (6)
+
+**KG view: controls always on screen, and the Types menu ends on a whole row.** Changes requested after a second look at the layout in the user's browser.
+
+- **View controls:** Hide/Show labels, Auto-rotate and Center moved from a bottom-centre pill into the top bar, next to the search, at the same 48px height. They now sit with the other global controls and can't fall below the visible area. As the window narrows, the bar sheds detail in a fixed order: keycaps (≤1500px), then the question sentence (≤1280px), then a narrower search (≤1000px), then the control names, leaving icons with an `aria-label` and a tooltip (≤900px). The controls themselves never go. With no bottom band left to reserve, the detail sheet now reaches the bottom edge.
+- **Types menu:** the list now holds exactly five whole rows (`max-height: 184px`) with 10px below the last one, instead of a half-cut row pressed against the pane's bottom edge. The scroll thumb and the edge fade signal that there's more.
+- **Verified live in Chrome** (claude-in-chrome MCP) at 1370×637 and 500×637:
+  - scrolling the menu to its last kind;
+  - the sheet down to the bottom edge;
+  - icon-only controls in the top bar on a phone;
+  - no console errors.
+- `inspect.mjs --app --allow glass` reports 0 FAIL and 1 WARN, `hero-void`. The headless capture lands while the page still shows "Loading the 3D view…", before the canvas has drawn, and with the controls no longer at the bottom, the lower half of that frame is empty stage. The live render fills it. The CDP interaction checks and the 59 tests pass.
+
 ## 2026-10-22 (5)
 
 **KG view: a compact Types menu and explicit view controls**, from reviewing the glass layout in the user's own browser.
