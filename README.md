@@ -47,6 +47,7 @@ Stop hand-rolling the same `CLAUDE.md`, the same guardrails, the same "please do
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults later, with an ADR - never the DB-access directive |
 | `docs/specs/`, `docs/adr/`, `docs/glossary.md` | Spec-driven artifacts, architectural decisions, ubiquitous language |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
+| `docs/security-policy.md` | The project's security baseline - DB-guard layers, the external-content rule, general practices and its compliance regime - read by `architect` and `security`, cited by every feature's `requirements.md` |
 | `docs/knowledge-graph/` + `.claude/agents/knowledge-graph.md` | The domain model as a real graph (entities, VOs, aggregates, bounded contexts, relationships), MCP-backed when Node/`npx` is available |
 | `Database/` (only when the project has a database) | The complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature |
 | `docs/specs/<feature>/overview.html` (conditional, per feature) | Self-contained static HTML/SVG - no external dependency - summarizing a feature's affected screens, its scoped entity/relationship diagram, and affected `Database/` objects, for a non-technical reader. Produced only when that feature touches UI and/or the database |
@@ -89,7 +90,7 @@ No agent can reach the system database or your cloud secrets — not by conventi
 4. **Structural guarantees**: no agent ever receives credentials; tests run against fakes/in-memory doubles or disposable containers a human starts; migrations are only ever *generated as files* for a human to review and apply.
 5. **Continuous verification**: `.claude/hooks/verify-guard.py` re-runs the deny-rule and hook-blocking checks in CI on every push/PR (wired into `ci.yml` when you picked GitHub Actions), so a weakened deny list or a disabled hook gets caught automatically instead of drifting silently.
 
-If a task seems to need DB access, every agent is instructed to stop and ask — never work around the guard. Full detail: `references/security-policy.md`.
+If a task seems to need DB access, every agent is instructed to stop and ask — never work around the guard. Full detail: `references/security-policy.md` (generated into each project as `docs/security-policy.md`).
 
 **Scope note:** this skill only bootstraps *other* projects. It has no production code, no agents and no database of its own — the engineering defaults and DB guard above describe what gets built into the *generated* project, never this skill's own behavior.
 
@@ -138,7 +139,7 @@ assets/templates/                 everything scaffold.py copies into the generat
   .claude/skills/orchestrate/references/{parallel-implementation,context-hygiene,archiving,revert-checklist}.md
                                   detail moved out of orchestrate's SKILL.md to keep its body lean (progressive disclosure)
   docs/specs/, docs/specs/_templates/{security-report,findings-ledger,retro,feature-status}.md, docs/adr/,
-  docs/glossary.md, docs/test-strategy.md, docs/debugging-protocol.md
+  docs/glossary.md, docs/test-strategy.md, docs/debugging-protocol.md, docs/security-policy.md.tmpl
   docs/knowledge-graph/README.md
   .github/workflows/ci.yml.tmpl    (the generated project's own CI, distinct from this repo's test.yml above)
 ```

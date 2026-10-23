@@ -68,6 +68,7 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults deliberately, with an ADR - never the DB-access directive |
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
+| `docs/security-policy.md` | The project's security baseline (DB-guard layers, external-content rule, general practices, `COMPLIANCE` regime) - read by `architect`/`security`, cited by every `requirements.md` |
 | `docs/knowledge-graph/` | Domain model as a graph (MCP-backed when `NPX_CMD` is set; markdown fallback otherwise), plus its generated 3D view `graph.html` |
 | `Database/` (only when `DB_ENGINE` indicates a database) | Complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature, never a live connection or real data |
 | `docs/specs/<feature>/overview.html` (conditional) | Self-contained static HTML/SVG, no external dependency, produced per feature when it touches UI screens and/or the database - affected screens, feature-scoped ER diagram, affected `Database/` objects |
@@ -82,7 +83,7 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 ### Reference files
 - **`references/interview.md`** - The full interview script: every required answer key, its question, and notes (used in Step 1).
 - **`references/workflow.md`** - Summary of the 8-phase orchestrator workflow generated into the target project.
-- **`references/security-policy.md`** - The DB/secrets guard's full defense-in-depth design (5 layers) and the agents-treat-external-content-as-data rule.
+- **`references/security-policy.md`** - The DB/secrets guard's full defense-in-depth design (5 layers) and the agents-treat-external-content-as-data rule; generated into the target project as `docs/security-policy.md`.
 - **`references/engineering-principles.md`** - The Clean Code/Clean Architecture/DDD/SOLID/TDD defaults generated agents apply unless the user overrides them.
 - **`references/spec-format.md`** - The exact shape of `requirements.md`/`design.md`/`tasks.md` and REQ-ID traceability conventions.
 - **`references/test-strategy.md`** - Test pyramid and fixture/test-double conventions generated into the target project.

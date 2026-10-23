@@ -2,6 +2,17 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-22 (8)
+
+**Fix: generated projects now get `docs/security-policy.md`.** Two generated files pointed at a security policy that was never generated. `docs/specs/_templates/requirements.md` said "see `security-policy.md`" and `Database/README.md` said "see `references/security-policy.md`", but that file only existed inside the skill's own `references/`. Found in a real project, where `planner` hit the dangling reference while writing a feature's requirements and had to remove it.
+
+- New template `assets/templates/docs/security-policy.md.tmpl`, adapted from `references/security-policy.md` for the generated project. It records the project's `COMPLIANCE` regime.
+- Both dangling references now point to `docs/security-policy.md`.
+- `security` starts its review from the policy. `architect` uses it as the threat-model baseline. `CLAUDE.md`/`AGENTS.md` list it next to the test-strategy guide and the debugging protocol.
+- `verify_setup.py` requires the file.
+- Three new tests: the policy is generated with `COMPLIANCE` substituted; no generated `.md` references any `security-policy.md` other than `docs/security-policy.md`; the `security` agent cites it. The suite has 62 tests, all passing.
+- Projects scaffolded before this fix don't get the file automatically. Render `assets/templates/docs/security-policy.md.tmpl` alone into `docs/` and fix the same two references. Re-running `scaffold.py` would also add every other file introduced since.
+
 ## 2026-10-22 (7)
 
 **KG view: minimal controls in the bottom-right corner.** These changes came from reviewing the layout live with the user.
