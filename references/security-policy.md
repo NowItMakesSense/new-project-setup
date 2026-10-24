@@ -34,9 +34,10 @@ A separate threat from the DB guard above: anything an agent reads that originat
 - Destructive or outward-facing actions (deleting data, pushing, deploying, publishing, sending messages) require explicit human confirmation.
 - Log without PII/secrets; document data retention per `COMPLIANCE` answer.
 
-## Knowledge-graph MCP server (out of scope for the DB guard, by design)
-If configured (`NPX_CMD` wasn't `none` at setup), `.mcp.json` at the repo root declares an `mcpServers.knowledge-graph` entry running `@modelcontextprotocol/server-memory`, used only by the `knowledge-graph` agent to persist the project's domain model (entities, value objects, aggregates, bounded contexts, relationships) to `docs/knowledge-graph/graph.jsonl`. This is local project-domain metadata: no credentials, no production data, no connection to the system database.
-The PreToolUse guard hook's matcher (`Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob`) does not cover MCP tool calls (named `mcp__<server>__<tool>`), so `mcp__knowledge-graph__*` calls are not intercepted by it - this is intentional, not a gap. Do not add a new MCP server that could reach the database or credentials without first extending the guard's matcher and threat model.
+## Project graph (out of scope for the DB guard, by design)
+`.claude/scripts/build-graph.py` maps the project's own files and the relationships between them into `docs/knowledge-graph/`. It runs locally with the Python standard library: no server, no network call, no MCP tool. It reads only text files that are not credentials - it skips `.env*`, keys, certificates, databases, lockfiles and binaries - and never touches the system database. The graph holds file paths, titles, summaries and symbol names, so treat it like source: if a secret is ever written into a project file, it can appear in the graph's summaries, which is another reason secrets never belong in files.
+Two advisory hooks (`.claude/hooks/graph-hook.py`) rebuild the graph at session start and remind agents to query it before searching; they only run `build-graph.py`, never block a tool call, and fail open. They do not replace the DB guard hook.
+Do not add an MCP server or any other tool that could reach the database or credentials without first extending the guard's matcher and threat model.
 
 ## Limits
 Hook and deny rules are enforced only by Claude Code. `AGENTS.md` is advisory for other tools. Tell the user this.

@@ -2,6 +2,32 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-24 (3)
+
+**Fix: the project graph no longer leaves most files unrelated.** In a real C#/.NET project 87 of 273 files were orphans (all `Database/` constraint files and most C# sources): only Python and JS/TS imports were understood, and database objects are named in prose without a path.
+
+- **Types by name:** a code file that names a type declared in exactly one other file (C#, Java, Go, Kotlin, ... any non-Python language) gets a `uses` edge (INFERRED). `sealed`, `internal`, `partial`, `readonly`, `record` and `data` declarations are now recognised as symbols.
+- **Tests:** `FooTests.cs` / `FooSpec` map to `Foo` (the CamelCase suffix is stripped), not only `test_foo` / `foo.test`.
+- **Database objects:** a document naming `pk_player`, `ux_player_email` or `accounts.player` (the file stem under `Database/`) gets a `mentions` edge (EXTRACTED) to that file.
+- **Last resort:** a file still unrelated is attached to the nearest `README.md`/`index.md` above it (`part_of`, INFERRED). Files with no README above them stay listed as orphans.
+- Result on that project: 429 -> 1044 relationships, 87 -> 4 orphans. One new test.
+- **Projects scaffolded before this fix:** copy `.claude/scripts/build-graph.py` and run it.
+
+## 2026-10-24 (2)
+
+**The graph is now a map of the project's files and the relationships between them (graphify-style), with nothing left of the old domain-entity graph.**
+
+- **New `.claude/scripts/build-graph.py`** replaces `render-graph.py` and `index-docs.py`. Every project file is a node (source, tests, specs, ADRs, docs, `Database/`, agents, skills, scripts, config); every relationship is an edge tagged `EXTRACTED` (Python imports via `ast`, relative JS/TS imports, markdown links, backticked paths, `/skill` invocations, `REQ-ID` coverage from tasks and tests) or `INFERRED` (spec chain, test named after its source, agent named in a prompt). A link to a file that doesn't exist becomes a `missing` node and is reported.
+- **Outputs** in `docs/knowledge-graph/`: `graph.json`, `GRAPH_REPORT.md` (most-connected files, communities, broken references, orphans) and the 3D `graph.html`. Deterministic: no timestamp.
+- **Queries** like graphify: `query <terms>`, `explain <file>`, `path <a> <b>`, `check` (stale?). Exit codes 0 / 3 ambiguous / 4 no match.
+- **Never reads** `.env*`, keys, certificates, databases, lockfiles or binaries.
+- **Removed:** the MCP memory server and `.mcp.json`, `graph.jsonl`/`graph.md`, the `NPX_CMD` interview answer (an old answers file that still has it is ignored), the DDD entity persistence in the `knowledge-graph` agent (now Read/Grep/Glob/Bash, keeps the graph current and answers location questions), the retrofit-and-confirm step in `/orchestrate`, and the MCP section of the security policy (replaced by a short note on the graph).
+- **3D view** recoloured for file kinds (source / test / spec / doc), "missing file" for broken references.
+- `CLAUDE.md`, `AGENTS.md`, `plan-grill`, `spec-writer`, `to-spec`, `to-tickets`, `review-change`, `launch-readiness`, the orchestrator and the docs point at `build-graph.py query` instead of the old index.
+- Tests: 70 passing; the old MCP/entity tests are replaced by tests on real edges, secrets exclusion, determinism, staleness, query exit codes, safe HTML embedding and a check that no generated file mentions the old pieces.
+- **Keeps the graph in front of the agent:** the scaffold builds it once at the end; a `SessionStart` hook (`.claude/hooks/graph-hook.py refresh`) rebuilds it when stale; a `PreToolUse` hook on `Grep|Glob` (`nudge`) reminds the agent to ask the graph first (first search, then every 4th). Both are advisory: they never block and fail open, so they raise the odds the graph is used but do not guarantee it. `--merge-settings` now merges every hook event, not just `PreToolUse`. Tests: 78 passing.
+- **Projects scaffolded before this change:** delete `.mcp.json`, `graph.jsonl`, `graph.md`, `render-graph.py`, `index-docs.py`, copy `build-graph.py` and `graph-view.html`, then run `build-graph.py`.
+
 ## 2026-10-24
 
 **Graph-first lookup, a real spec step after planning, a two-axis reviewer, and an orchestrator that resumes.**

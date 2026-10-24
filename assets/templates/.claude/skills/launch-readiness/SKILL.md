@@ -23,7 +23,7 @@ For each failure mode in `design.md`: is it logged (structured, no secrets or pe
 - Config and secrets the release needs are named, with where they come from - values are never read or written by agents.
 
 ## 5. Documentation and decisions
-README/setup/runbook updated to match the release; changelog entry written; every architectural decision made while building has an ADR in `docs/adr/`; `docs/glossary.md` matches the code's names; the docs index and graph are refreshed (`index-docs.py`, `render-graph.py`).
+README/setup/runbook updated to match the release; changelog entry written; every architectural decision made while building has an ADR in `docs/adr/`; `docs/glossary.md` matches the code's names; the project graph is rebuilt (`build-graph.py`) and has no broken references.
 
 ## 6. Output
 A short checklist with each item `done` / `N/A (reason)` / `open (owner)`. Any `open` item is reported to the orchestrator before the phase 8 gate; the user decides whether it blocks.

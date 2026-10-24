@@ -8,7 +8,7 @@ description: Turn the planning conversation and docs/specs/discovery.md into the
 Synthesize, don't interview: everything needed is already in the conversation and `docs/specs/discovery.md`. Ask only about what is genuinely missing (and about test seams, below) - never fill a gap with a guess.
 
 ## Process
-1. **Look before writing.** Look the feature up in the docs index first (`{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <feature terms>`), then read only the documents it points to: `docs/specs/discovery.md`, `docs/glossary.md`, relevant ADRs, and the code the feature touches. Use glossary terms verbatim; do not contradict an ADR - if the feature needs to, say so and stop.
+1. **Look before writing.** Look the feature up in the project graph first (`{{PYTHON_CMD}} .claude/scripts/build-graph.py query <feature terms>`), then read only the documents it points to: `docs/specs/discovery.md`, `docs/glossary.md`, relevant ADRs, and the code the feature touches. Use glossary terms verbatim; do not contradict an ADR - if the feature needs to, say so and stop.
 2. **Sketch the test seams.** A seam is where a test can observe behavior without reaching into internals. Prefer seams that already exist, at the highest level that still gives a fast, deterministic test - ideally one seam for the whole feature. **Confirm them with the user** before writing.
 3. **Write `docs/specs/<feature-slug>/prd.md`** from `docs/specs/_templates/prd.md`, in the project's docs language:
    - *Problem statement* and *Solution* - from the user's perspective, no jargon the user didn't use.
@@ -17,7 +17,7 @@ Synthesize, don't interview: everything needed is already in the conversation an
    - *Testing decisions* - what a good test is here (external behavior), the confirmed seams, modules to test, prior art.
    - *Out of scope* and *Further notes*.
 4. **Self-check, then present.** Re-read it: no placeholder text, no story without a benefit, no decision without a source, nothing in "Out of scope" that a story needs. Fix it yourself; then present it and get explicit approval. Set `Status: Approved` (with date and approver) only after that.
-5. **Hand off.** Tell the orchestrator the PRD is ready for `/spec-writer` (requirements -> design) and add the file to the docs index (`{{PYTHON_CMD}} .claude/scripts/index-docs.py`).
+5. **Hand off.** Tell the orchestrator the PRD is ready for `/spec-writer` (requirements -> design) and rebuild the project graph (`{{PYTHON_CMD}} .claude/scripts/build-graph.py`).
 
 ## Rules
 - The PRD is the *why and what*. Anything testable and exact (EARS, Gherkin, NFR numbers) belongs in `requirements.md`, not here.

@@ -27,7 +27,7 @@ def base_answers(**overrides) -> dict:
         "LINT_CMD": "ruff", "BUILD_CMD": "none", "DB_ENGINE": "postgresql",
         "TEST_DB_STRATEGY": "in-memory fakes", "CI_PROVIDER": "none", "VCS_BRANCHING": "trunk-based",
         "ENGINEERING_PRINCIPLES": "defaults", "COMPLIANCE": "none", "TEAM": "solo",
-        "PYTHON_CMD": "python", "NPX_CMD": "none", "HAS_UI": "no",
+        "PYTHON_CMD": "python", "HAS_UI": "no",
         "MODEL_PRIORITY": "balanced", "COVERAGE_THRESHOLD": "80", "EXTRA_DENY": [],
     }
     answers.update(overrides)
@@ -255,57 +255,6 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(v.returncode, 0, v.stdout)
         self.assertIn("0 failure(s)", v.stdout)
 
-    def test_npx_cmd_set_adds_mcp_server(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        # Project-scoped MCP servers live in .mcp.json at the repo root; Claude Code does not
-        # read them from .claude/settings.json.
-        mcp = json.loads((self.target / ".mcp.json").read_text())
-        kg = mcp["mcpServers"]["knowledge-graph"]
-        self.assertEqual(kg["command"], "npx")
-        self.assertEqual(kg["args"], ["-y", "@modelcontextprotocol/server-memory"])
-        self.assertTrue(kg["env"]["MEMORY_FILE_PATH"].endswith("docs/knowledge-graph/graph.jsonl"))
-        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
-        self.assertNotIn("mcpServers", settings)
-        agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text()
-        self.assertIn("mcp__knowledge-graph__read_graph", agent)
-
-    def test_mcp_server_is_pre_approved_in_settings(self):
-        """Without enabledMcpjsonServers the server sits at 'pending approval' and exposes no tools."""
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
-        self.assertIn("knowledge-graph", settings["enabledMcpjsonServers"])
-
-    def test_no_mcp_pre_approval_when_npx_none(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
-        self.assertNotIn("enabledMcpjsonServers", settings)
-
-    def test_mcp_memory_path_is_absolute_and_literal(self):
-        """server-memory resolves a relative MEMORY_FILE_PATH against its own module dir (writes
-        then fail with ENOENT), and Claude Code does not export $CLAUDE_PROJECT_DIR to MCP servers -
-        so the path must be absolute and contain no variable reference."""
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        mcp = json.loads((self.target / ".mcp.json").read_text())
-        memory_path = mcp["mcpServers"]["knowledge-graph"]["env"]["MEMORY_FILE_PATH"]
-        self.assertNotIn("$", memory_path)
-        self.assertTrue(Path(memory_path).is_absolute(), memory_path)
-        self.assertEqual(
-            Path(memory_path), self.target.resolve() / "docs" / "knowledge-graph" / "graph.jsonl")
-
-    def test_npx_cmd_none_omits_mcp_server(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertFalse((self.target / ".mcp.json").exists())
-        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
-        self.assertNotIn("mcpServers", settings)
-        agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text()
-        tools_line = next(line for line in agent.splitlines() if line.startswith("tools:"))
-        self.assertNotIn("mcp__knowledge-graph__", tools_line)
-
     def test_ci_provider_github_actions_generates_workflow(self):
         r = run_scaffold(self.target, base_answers(CI_PROVIDER="github-actions"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -341,36 +290,19 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn("changed", claude_md.read_text(encoding="utf-8"))
 
     def test_merge_settings_unions_deny_rules_without_clobbering_custom_keys(self):
-        run_scaffold(self.target, base_answers(NPX_CMD="none"))
+        run_scaffold(self.target, base_answers())
         settings_path = self.target / ".claude" / "settings.json"
         settings = json.loads(settings_path.read_text())
         settings["permissions"]["deny"].append("Bash(my-custom-tool:*)")
         settings["someCustomKey"] = "keep-me"
         settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
 
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"), "--merge-settings")
+        r = run_scaffold(self.target, base_answers(), "--merge-settings")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         merged = json.loads(settings_path.read_text())
         self.assertIn("Bash(my-custom-tool:*)", merged["permissions"]["deny"])
         self.assertIn("Bash(psql:*)", merged["permissions"]["deny"])
         self.assertEqual(merged["someCustomKey"], "keep-me")
-        self.assertNotIn("mcpServers", merged)
-        # The server definition goes to .mcp.json, which didn't exist under NPX_CMD=none.
-        self.assertIn("knowledge-graph", json.loads((self.target / ".mcp.json").read_text())["mcpServers"])
-
-    def test_merge_settings_preserves_other_servers_in_existing_mcp_json(self):
-        run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        mcp_path = self.target / ".mcp.json"
-        mcp = json.loads(mcp_path.read_text())
-        mcp["mcpServers"]["my-own-server"] = {"command": "my-tool", "args": []}
-        mcp["mcpServers"]["knowledge-graph"]["command"] = "customized-npx"
-        mcp_path.write_text(json.dumps(mcp, indent=2), encoding="utf-8")
-
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"), "--merge-settings")
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        merged = json.loads(mcp_path.read_text())["mcpServers"]
-        self.assertIn("my-own-server", merged)
-        self.assertEqual(merged["knowledge-graph"]["command"], "customized-npx")
 
     def test_verify_fails_when_deny_rule_removed(self):
         r = run_scaffold(self.target, base_answers())
@@ -482,37 +414,6 @@ class ScaffoldTests(unittest.TestCase):
                             capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
-    def test_render_graph_builds_3d_html_from_jsonl(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        kg_dir = self.target / "docs" / "knowledge-graph"
-        lines = [
-            {"type": "entity", "name": "Order", "entityType": "Aggregate",
-             "observations": ["defined in discovery.md", "note </script><b>x</b>"]},
-            {"type": "entity", "name": "Money", "entityType": "ValueObject", "observations": []},
-            {"type": "relation", "from": "Order", "to": "Money", "relationType": "priced in"},
-            {"type": "relation", "from": "Order", "to": "Customer", "relationType": "placed by"},
-        ]
-        (kg_dir / "graph.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
-        script = self.target / ".claude" / "scripts" / "render-graph.py"
-        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertIn("3 entities, 2 relations", p.stdout)
-        self.assertIn("WARN", p.stdout)  # Customer is a relation endpoint with no declared entity
-        page = (kg_dir / "graph.html").read_text(encoding="utf-8")
-        start = page.index('<script id="kg-data" type="application/json">') + len('<script id="kg-data" type="application/json">')
-        block = page[start:page.index("</script>", start)]
-        # An observation containing </script> must not be able to close the data block: it is escaped
-        # inside it, and the block still parses as the full graph.
-        self.assertIn("<\\/script>", block)
-        data = json.loads(block)
-        self.assertEqual({n["id"] for n in data["nodes"]}, {"Order", "Money", "Customer"})
-        self.assertEqual(next(n for n in data["nodes"] if n["id"] == "Customer")["type"], "undeclared")
-        self.assertIn({"source": "Order", "target": "Money", "label": "priced in"}, data["links"])
-        self.assertIn("note </script><b>x</b>", next(n for n in data["nodes"] if n["id"] == "Order")["observations"])
-        self.assertNotIn("__DATA__", page)
-        self.assertNotIn("__TITLE__", page)
-
     def test_render_graph_pins_exact_library_versions(self):
         r = run_scaffold(self.target, base_answers())
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -524,27 +425,6 @@ class ScaffoldTests(unittest.TestCase):
             for package in re.findall(r"/((?:three|3d-force-graph|three-forcegraph|three-render-objects)@[^/?&,]+)", url):
                 self.assertRegex(package, r"@\d+\.\d+\.\d+$", (name, url))
         self.assertRegex(imports["3d-force-graph"], r"3d-force-graph@\d+\.\d+\.\d+")
-
-    @unittest.skipUnless(shutil.which("node"), "node not installed")
-    def test_graph_view_maps_qualified_kinds_to_ddd_hues(self):
-        # Agents record kinds with qualifiers ("Value Object (imutável)", "Entity (aggregate root)");
-        # these must still land on the DDD hues instead of falling through to neutral grey.
-        r = run_scaffold(self.target, base_answers())
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        template = (self.target / ".claude" / "scripts" / "graph-view.html").read_text(encoding="utf-8")
-        src = template[template.index("const ALIASES"):template.index("const typeStyle")]
-        cases = {
-            "Aggregate": "aggregate", "AggregateRoot": "aggregate", "Entity (aggregate root)": "aggregate",
-            "Actor / Entity (aggregate root)": "aggregate", "Entity (catálogo)": "entity",
-            "Value Object (imutável)": "valueobject", "value_object": "valueobject",
-            "Bounded Context": "boundedcontext", "Domain Event (published)": "domainevent",
-            "Domain Service": "domainservice",
-        }
-        js = src + f"const cases = {json.dumps(cases)};\n" + (
-            "for (const [t, want] of Object.entries(cases)) { const got = kindKey(t);"
-            " if (got !== want) { console.log(`${t} -> ${got}, want ${want}`); process.exitCode = 1; } }")
-        p = subprocess.run(["node", "-e", js], capture_output=True, text=True, encoding="utf-8")
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
     def test_graph_view_uses_one_glass_material_with_fallbacks(self):
         r = run_scaffold(self.target, base_answers())
@@ -578,83 +458,6 @@ class ScaffoldTests(unittest.TestCase):
             self.assertIn(token, materials, token)
         self.assertIn("--allow glass", (craft / "SKILL.md").read_text(encoding="utf-8"))
 
-    def test_render_graph_uses_title_and_writes_empty_page(self):
-        r = run_scaffold(self.target, base_answers())
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        script = self.target / ".claude" / "scripts" / "render-graph.py"
-        out = self.target / "empty.html"
-        p = subprocess.run([PY, str(script), "--graph-dir", str(self.target / "nope"), "--out", str(out),
-                            "--title", "Shop & <Co>"], capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        page = out.read_text(encoding="utf-8")
-        self.assertIn("Shop &amp; &lt;Co&gt;", page)
-        self.assertIn('{"nodes": [], "links": []}', page)
-
-    def test_render_graph_reads_markdown_fallback(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        kg_dir = self.target / "docs" / "knowledge-graph"
-        (kg_dir / "graph.md").write_text(
-            "# Knowledge graph\n\n## Entities\n| Name | Type | Observations |\n|---|---|---|\n"
-            "| Order | Aggregate | a; b |\n| Line | Entity | |\n\n"
-            "## Relations\n| From | Relation | To |\n|---|---|---|\n| Order | contains | Line |\n",
-            encoding="utf-8",
-        )
-        script = self.target / ".claude" / "scripts" / "render-graph.py"
-        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertIn("2 entities, 1 relations", p.stdout)
-        self.assertNotIn("WARN", p.stdout)
-        self.assertIn('"contains"', (kg_dir / "graph.html").read_text(encoding="utf-8"))
-
-    def test_render_graph_exports_markdown_from_jsonl(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        kg_dir = self.target / "docs" / "knowledge-graph"
-        lines = [
-            {"type": "entity", "name": "Order", "entityType": "Aggregate",
-             "observations": ["total | net", "multi\nline"]},
-            {"type": "entity", "name": "Money", "entityType": "ValueObject", "observations": []},
-            {"type": "relation", "from": "Order", "to": "Money", "relationType": "priced in"},
-        ]
-        (kg_dir / "graph.md").write_text("stale hand-written fallback\n", encoding="utf-8")
-        (kg_dir / "graph.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
-        script = self.target / ".claude" / "scripts" / "render-graph.py"
-        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        md = (kg_dir / "graph.md").read_text(encoding="utf-8")
-        self.assertNotIn("stale hand-written fallback", md)
-        self.assertIn("Generated from `graph.jsonl`", md)
-        self.assertIn("| Order | Aggregate | total &#124; net<br>multi line |", md)
-        self.assertIn("| Order | priced in | Money |", md)
-        # Deterministic: re-rendering an unchanged graph leaves the export byte-identical.
-        subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertEqual(md, (kg_dir / "graph.md").read_text(encoding="utf-8"))
-        # The export round-trips through the markdown fallback reader.
-        (kg_dir / "graph.jsonl").unlink()
-        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertIn("2 entities, 1 relations", p.stdout)
-
-    def test_render_graph_never_overwrites_markdown_in_fallback_mode(self):
-        r = run_scaffold(self.target, base_answers(NPX_CMD="none"))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        kg_dir = self.target / "docs" / "knowledge-graph"
-        source = ("# Knowledge graph\n\n## Entities\n| Name | Type | Observations |\n|---|---|---|\n"
-                  "| Order | Aggregate | a |\n")
-        (kg_dir / "graph.md").write_text(source, encoding="utf-8")
-        script = self.target / ".claude" / "scripts" / "render-graph.py"
-        p = subprocess.run([PY, str(script), "--graph-dir", str(kg_dir)], capture_output=True, text=True)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual((kg_dir / "graph.md").read_text(encoding="utf-8"), source)
-
-    def test_knowledge_graph_agent_regenerates_html(self):
-        r = run_scaffold(self.target, base_answers())
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
-        tools_line = next(line for line in agent.splitlines() if line.startswith("tools:"))
-        self.assertIn("Bash", tools_line)
-        self.assertIn('python .claude/scripts/render-graph.py --title "demo"', agent)
-
     def _write_feature(self, name="billing", tasks=None, req_status="Approved"):
         fdir = self.target / "docs" / "specs" / name
         fdir.mkdir(parents=True, exist_ok=True)
@@ -665,47 +468,6 @@ class ScaffoldTests(unittest.TestCase):
         if tasks is not None:
             (fdir / "tasks.md").write_text("# Tasks\n\nStatus: Approved\n\n" + tasks, encoding="utf-8")
         return fdir
-
-    def _write_graph(self):
-        kg = self.target / "docs" / "knowledge-graph"
-        kg.mkdir(parents=True, exist_ok=True)
-        (kg / "graph.jsonl").write_text(json.dumps({"type": "entity", "name": "Invoice", "entityType": "aggregate",
-                                                    "observations": ["defined in prd.md"]}) + "\n", encoding="utf-8")
-        return kg
-
-    def test_docs_index_finds_documents_and_entities(self):
-        run_scaffold(self.target, base_answers())
-        self._write_feature(tasks="## T-001: a\n- Status: done\n- Covers: REQ-001\n- Blocked by: none\n")
-        kg = self._write_graph()
-        script = self.target / ".claude" / "scripts" / "index-docs.py"
-        r = subprocess.run([PY, str(script)], capture_output=True, text=True, cwd=self.target)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        index = json.loads((kg / "docs-index.json").read_text(encoding="utf-8"))
-        prd = next(d for d in index["docs"] if d["path"] == "docs/specs/billing/prd.md")
-        self.assertEqual((prd["kind"], prd["feature"], prd["status"]), ("prd", "billing", "Approved"))
-        self.assertIn("Invoice", prd["mentions"])
-        md = (kg / "docs-index.md").read_text(encoding="utf-8")
-        self.assertIn("docs/specs/billing/requirements.md", md)
-        f = subprocess.run([PY, str(script), "--find", "invoice"], capture_output=True, text=True, cwd=self.target)
-        self.assertIn("Invoice", f.stdout)
-        self.assertIn("docs/specs/billing/prd.md", f.stdout)
-        self.assertEqual(subprocess.run([PY, str(script), "--check"], cwd=self.target, capture_output=True).returncode, 0)
-        before = (kg / "docs-index.md").read_text(encoding="utf-8")
-        subprocess.run([PY, str(script)], cwd=self.target, capture_output=True)
-        self.assertEqual(before, (kg / "docs-index.md").read_text(encoding="utf-8"))
-        (self.target / "docs" / "late.md").write_text("# Late\n", encoding="utf-8")
-        self.assertEqual(subprocess.run([PY, str(script), "--check"], cwd=self.target, capture_output=True).returncode, 1)
-
-    def test_render_graph_draws_documents_from_the_index(self):
-        run_scaffold(self.target, base_answers())
-        self._write_feature()
-        kg = self._write_graph()
-        scripts = self.target / ".claude" / "scripts"
-        subprocess.run([PY, str(scripts / "index-docs.py")], cwd=self.target, check=True, capture_output=True)
-        r = subprocess.run([PY, str(scripts / "render-graph.py"), "--graph-dir", str(kg)], capture_output=True, text=True)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("doc:docs/specs/billing/prd.md", (kg / "graph.html").read_text(encoding="utf-8"))
-        self.assertNotIn("doc:", (kg / "graph.jsonl").read_text(encoding="utf-8"))
 
     def test_spec_state_reports_frontier_and_resumes_by_path(self):
         run_scaffold(self.target, base_answers())
@@ -772,13 +534,6 @@ class ScaffoldTests(unittest.TestCase):
         for needle in ("argument-hint", "$ARGUMENTS", "spec-state.py", "never regenerate"):
             self.assertIn(needle, body)
 
-    def test_agents_are_told_to_look_in_the_graph_first(self):
-        run_scaffold(self.target, base_answers())
-        for f in ("CLAUDE.md", "AGENTS.md"):
-            self.assertIn("index-docs.py --find", (self.target / f).read_text(encoding="utf-8"), f)
-        kg = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
-        self.assertIn("docs-index.md", kg)
-
     def test_no_dangling_script_or_skill_references(self):
         """Structural lint: every `.claude/scripts/X` and `/skill` a generated doc points to exists."""
         run_scaffold(self.target, base_answers(HAS_UI="yes"))
@@ -809,6 +564,307 @@ class ScaffoldTests(unittest.TestCase):
             self.assertGreater(len(m.group(2)), 40, d.name)
         agent = (self.target / ".claude" / "agents" / "devops-docs.md").read_text(encoding="utf-8")
         self.assertIn("- launch-readiness", agent)
+
+    # ---------------------------------------------------------------- project graph (build-graph.py)
+    def _graph_project(self):
+        """A small real project: Python + TS sources, a test, a spec chain, a broken link, and secrets."""
+        files = {
+            "shop/__init__.py": "",
+            "shop/money.py": '"""Money value type."""\nclass Money:\n    pass\n',
+            "shop/orders.py": '"""Place orders."""\nfrom shop.money import Money\n\ndef place(): return Money()\n',
+            "tests/test_orders.py": "from shop.orders import place\n# covers REQ-001\ndef test_place(): assert place()\n",
+            "web/a.ts": 'import { b } from "./b";\nexport function a() { return b(); }\n',
+            "web/b.ts": "export function b() { return 1; }\n",
+            "README.md": "# Shop\n\nSee [the design](docs/specs/billing/design.md) and [gone](docs/nope.md).\nCode: `shop/orders.py`.\n",
+            "docs/specs/billing/prd.md": "# Spec (PRD): billing\n\nStatus: Approved\n\nInvoice customers.\n",
+            "docs/specs/billing/requirements.md": "# Requirements\n\nStatus: Approved\n\n- REQ-001: WHEN x THE SYSTEM SHALL y.\n",
+            "docs/specs/billing/design.md": "# Design\n\nStatus: Approved\n\nUses REQ-001.\n",
+            "docs/specs/billing/tasks.md": "# Tasks\n\n## T-001: a\n- Covers: REQ-001\n- Blocked by: none\n",
+            ".env": "SECRET_TOKEN=hunter2\n",
+            "keys/server.pem": "-----BEGIN PRIVATE KEY-----\nhunter3\n",
+            "node_modules/x/index.js": "module.exports = 1;\n",
+        }
+        root = Path(self._tmp.name) / "graph-project"
+        for rel, text in files.items():
+            f = root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text, encoding="utf-8")
+        shutil.copy(ROOT / "assets" / "templates" / ".claude" / "scripts" / "build-graph.py", root / "build-graph.py")
+        shutil.copy(ROOT / "assets" / "templates" / ".claude" / "scripts" / "graph-view.html", root / "graph-view.html")
+        return root
+
+    def _graph(self, root, *args):
+        return subprocess.run([PY, str(root / "build-graph.py"), "--root", str(root), *args],
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def _edges(self, root):
+        graph = json.loads((root / "docs" / "knowledge-graph" / "graph.json").read_text(encoding="utf-8"))
+        return graph, {(e["source"], e["target"], e["label"]): e["confidence"] for e in graph["links"]}
+
+    def test_build_graph_maps_files_and_relationships(self):
+        root = self._graph_project()
+        r = self._graph(root, "--title", "Shop")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        graph, edges = self._edges(root)
+        ids = {n["id"] for n in graph["nodes"]}
+        self.assertEqual(graph["schema_version"], 1)
+        self.assertIn(("shop/orders.py", "shop/money.py", "imports"), edges)
+        self.assertEqual(edges[("shop/orders.py", "shop/money.py", "imports")], "EXTRACTED")
+        self.assertIn(("tests/test_orders.py", "shop/orders.py", "imports"), edges)
+        self.assertEqual(edges[("tests/test_orders.py", "shop/orders.py", "tests")], "INFERRED")
+        self.assertIn(("web/a.ts", "web/b.ts", "imports"), edges)
+        self.assertIn(("README.md", "docs/specs/billing/design.md", "links_to"), edges)
+        self.assertIn(("README.md", "shop/orders.py", "mentions"), edges)
+        self.assertEqual(edges[("tests/test_orders.py", "docs/specs/billing/requirements.md", "verifies")], "EXTRACTED")
+        self.assertEqual(edges[("docs/specs/billing/tasks.md", "docs/specs/billing/requirements.md", "covers")], "EXTRACTED")
+        self.assertEqual(edges[("docs/specs/billing/design.md", "docs/specs/billing/requirements.md", "references_req")], "EXTRACTED")
+        self.assertEqual(edges[("docs/specs/billing/requirements.md", "docs/specs/billing/prd.md", "derives_from")], "INFERRED")
+        # a link to a file that does not exist is a `missing` node, and reported
+        missing = next(n for n in graph["nodes"] if n["id"] == "docs/nope.md")
+        self.assertEqual(missing["type"], "missing")
+        self.assertIn("docs/nope.md", (root / "docs" / "knowledge-graph" / "GRAPH_REPORT.md").read_text(encoding="utf-8"))
+        # nothing sensitive or generated is indexed or leaked
+        self.assertFalse({".env", "keys/server.pem", "node_modules/x/index.js"} & ids)
+        for out in ("graph.json", "GRAPH_REPORT.md", "graph.html"):
+            text = (root / "docs" / "knowledge-graph" / out).read_text(encoding="utf-8")
+            self.assertNotIn("hunter2", text, out)
+            self.assertNotIn("hunter3", text, out)
+        self.assertIn("<title>Shop", (root / "docs" / "knowledge-graph" / "graph.html").read_text(encoding="utf-8"))
+
+    def test_build_graph_relates_csharp_sources_and_database_objects(self):
+        """C# has no import graph and Database/ files are only named in prose: neither may end up orphaned."""
+        root = self._graph_project()
+        files = {
+            "src/Domain/Email.cs": "namespace Shop;\npublic sealed record Email(string Value);\n",
+            "src/Domain/Player.cs": "namespace Shop;\ninternal sealed partial class Player { Email email; }\n",
+            "tests/EmailTests.cs": "namespace Shop;\npublic class EmailTests { Email e; }\n",
+            "Database/README.md": "# Database\n",
+            "Database/er-diagram.md": "# ER\n\nplayer [PK pk_player, unique ux_player_email]\n",
+            "Database/primary-keys/pk_player.md": "# pk_player\n\nTable: accounts.player\n",
+            "Database/indexes/ux_player_email.md": "# ux_player_email\n\nTable: accounts.player\n",
+            "Database/tables/accounts.player.md": "# accounts.player\n\nPK `pk_player`.\n",
+            "Database/notes/lonely_note.md": "# lonely\n",
+            "Database/notes/README.md": "# Notes\n",
+        }
+        for rel, text in files.items():
+            f = root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text, encoding="utf-8")
+        self.assertEqual(self._graph(root).returncode, 0)
+        graph, edges = self._edges(root)
+        self.assertIn(("src/Domain/Player.cs", "src/Domain/Email.cs", "uses"), edges)
+        self.assertIn(("tests/EmailTests.cs", "src/Domain/Email.cs", "tests"), edges)
+        self.assertEqual(edges[("Database/er-diagram.md", "Database/primary-keys/pk_player.md", "mentions")], "EXTRACTED")
+        self.assertIn(("Database/er-diagram.md", "Database/indexes/ux_player_email.md", "mentions"), edges)
+        self.assertIn(("Database/tables/accounts.player.md", "Database/primary-keys/pk_player.md", "mentions"), edges)
+        # a file nothing names still belongs to its folder's README
+        self.assertEqual(edges[("Database/notes/lonely_note.md", "Database/notes/README.md", "part_of")], "INFERRED")
+
+    def test_build_graph_is_deterministic_and_check_detects_staleness(self):
+        root = self._graph_project()
+        self.assertEqual(self._graph(root, "check").returncode, 1)          # nothing built yet
+        self._graph(root)
+        out = root / "docs" / "knowledge-graph"
+        before = {n: (out / n).read_text(encoding="utf-8") for n in ("graph.json", "GRAPH_REPORT.md")}
+        self._graph(root)
+        self.assertEqual(before, {n: (out / n).read_text(encoding="utf-8") for n in before})
+        self.assertEqual(self._graph(root, "check").returncode, 0)
+        (root / "shop" / "late.py").write_text("x = 1\n", encoding="utf-8")
+        self.assertEqual(self._graph(root, "check").returncode, 1)
+        self._graph(root)
+        self.assertEqual(self._graph(root, "check").returncode, 0)
+
+    def test_build_graph_queries_and_exit_codes(self):
+        root = self._graph_project()
+        (root / "a").mkdir()
+        (root / "b").mkdir()
+        (root / "a" / "util.py").write_text("def f(): pass\n", encoding="utf-8")
+        (root / "b" / "util.py").write_text("def g(): pass\n", encoding="utf-8")
+        self.assertEqual(self._graph(root, "query", "orders").returncode, 4)  # no graph built yet
+        self._graph(root)
+        q = self._graph(root, "query", "orders")
+        self.assertEqual(q.returncode, 0, q.stdout + q.stderr)
+        self.assertIn("shop/orders.py", q.stdout)
+        self.assertEqual(self._graph(root, "query", "zzzznothing").returncode, 4)
+        e = self._graph(root, "explain", "shop/orders.py")
+        self.assertEqual(e.returncode, 0, e.stdout + e.stderr)
+        self.assertIn("imports -> shop/money.py", e.stdout)
+        self.assertIn("tests/test_orders.py", e.stdout)
+        amb = self._graph(root, "explain", "util.py")
+        self.assertEqual(amb.returncode, 3)
+        self.assertIn("a/util.py", amb.stdout)
+        self.assertIn("b/util.py", amb.stdout)
+        self.assertEqual(self._graph(root, "explain", "nope.py").returncode, 4)
+        path = self._graph(root, "path", "tests/test_orders.py", "shop/money.py")
+        self.assertEqual(path.returncode, 0, path.stdout + path.stderr)
+        self.assertIn("shop/orders.py", path.stdout)
+        self.assertEqual(self._graph(root, "path", "web/a.ts", "shop/money.py").returncode, 4)
+
+    def test_build_graph_html_embeds_data_safely(self):
+        root = self._graph_project()
+        (root / "docs" / "evil.md").write_text("# Evil\n\nNotes about </script><b>x</b> markup.\n", encoding="utf-8")
+        self._graph(root)
+        page = (root / "docs" / "knowledge-graph" / "graph.html").read_text(encoding="utf-8")
+        block = page.split('id="kg-data"')[1].split(">", 1)[1].split("</script>")[0]
+        data = json.loads(block)
+        self.assertIn("docs/evil.md", {n["id"] for n in data["nodes"]})
+        self.assertIn("<\\/script>", block)
+        self.assertNotIn("__DATA__", page)
+        self.assertNotIn("__TITLE__", page)
+
+    def test_graph_view_shows_files_not_domain_concepts(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        template = (self.target / ".claude" / "scripts" / "graph-view.html").read_text(encoding="utf-8")
+        for stale in ("Aggregate", "Bounded context", "Value object", "create_entities", "render-graph.py", "knowledge-graph agent"):
+            self.assertNotIn(stale, template, stale)
+        for word in ("Source", "Missing file", 'id="missing"', "build-graph.py"):
+            self.assertIn(word, template, word)
+
+    def test_no_leftovers_of_the_domain_graph_or_mcp_server(self):
+        r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.target / ".mcp.json").exists())
+        settings = json.loads((self.target / ".claude" / "settings.json").read_text())
+        self.assertNotIn("enabledMcpjsonServers", settings)
+        self.assertNotIn("mcpServers", settings)
+        for old in ("index-docs.py", "render-graph.py"):
+            self.assertFalse((self.target / ".claude" / "scripts" / old).exists(), old)
+        for stale in ("server-memory", "graph.jsonl", "render-graph", "index-docs", "docs-index", "mcp__knowledge-graph",
+                      "read_graph", "create_entities", "NPX_CMD", "MEMORY_FILE_PATH"):
+            offenders = [str(f.relative_to(self.target)) for f in self.target.rglob("*")
+                         if f.is_file() and ".git" not in f.parts and "node_modules" not in f.parts
+                         and stale in f.read_text(encoding="utf-8", errors="ignore")]
+            self.assertEqual(offenders, [], stale)
+
+    def test_legacy_npx_cmd_answer_is_ignored(self):
+        r = run_scaffold(self.target, base_answers(NPX_CMD="npx"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.target / ".mcp.json").exists())
+
+    def test_knowledge_graph_agent_builds_and_queries_the_graph(self):
+        run_scaffold(self.target, base_answers())
+        agent = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
+        tools = re.search(r"^tools:\s*(.+)$", agent, re.M).group(1)
+        self.assertIn("Bash", tools)
+        self.assertNotIn("Write", tools)
+        self.assertNotIn("mcp__", tools)
+        self.assertIn('python .claude/scripts/build-graph.py --title "demo"', agent)
+        for word in ("EXTRACTED", "INFERRED", "explain", "path"):
+            self.assertIn(word, agent)
+
+    def test_agents_are_told_to_look_in_the_graph_first(self):
+        run_scaffold(self.target, base_answers())
+        for f in ("CLAUDE.md", "AGENTS.md"):
+            self.assertIn("build-graph.py query", (self.target / f).read_text(encoding="utf-8"), f)
+        self.assertIn("build-graph.py", (self.target / ".claude" / "skills" / "orchestrate" / "SKILL.md").read_text(encoding="utf-8"))
+
+    def test_build_graph_runs_on_a_fresh_scaffold(self):
+        run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        script = self.target / ".claude" / "scripts" / "build-graph.py"
+        r = subprocess.run([PY, str(script), "--root", str(self.target), "--title", "demo"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        graph = json.loads((self.target / "docs" / "knowledge-graph" / "graph.json").read_text(encoding="utf-8"))
+        kinds = {n["type"] for n in graph["nodes"]}
+        self.assertTrue({"agent", "skill", "script", "doc", "database"} <= kinds, kinds)
+        _, edges = self._edges(self.target)
+        self.assertIn((".claude/skills/orchestrate/SKILL.md", ".claude/skills/to-spec/SKILL.md", "invokes"), edges)
+        self.assertEqual(subprocess.run([PY, str(script), "--root", str(self.target), "check"], capture_output=True).returncode, 0)
+        q = subprocess.run([PY, str(script), "--root", str(self.target), "query", "traceability"], capture_output=True, text=True)
+        self.assertIn("check-traceability.py", q.stdout)
+
+    # ---------------------------------------------------------------- graph hooks and first build
+    def _hook(self, mode, stdin="{}", project=None):
+        import os
+        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project or self.target)}
+        return subprocess.run([PY, str(self.target / ".claude" / "hooks" / "graph-hook.py"), mode],
+                              input=stdin, capture_output=True, text=True, encoding="utf-8", env=env)
+
+    def test_scaffold_builds_the_graph_so_it_exists_from_the_first_session(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Built the project graph", r.stdout)
+        for name in ("graph.json", "GRAPH_REPORT.md", "graph.html"):
+            self.assertTrue((self.target / "docs" / "knowledge-graph" / name).is_file(), name)
+        script = self.target / ".claude" / "scripts" / "build-graph.py"
+        self.assertEqual(subprocess.run([PY, str(script), "--root", str(self.target), "check"], capture_output=True).returncode, 0)
+
+    def test_dry_run_does_not_build_the_graph(self):
+        run_scaffold(self.target, base_answers(), "--dry-run")
+        self.assertFalse((self.target / "docs").exists())
+
+    def test_graph_hooks_are_registered_in_settings(self):
+        run_scaffold(self.target, base_answers())
+        hooks = json.loads((self.target / ".claude" / "settings.json").read_text())["hooks"]
+        pre = {e["matcher"]: [h["command"] for h in e["hooks"]] for e in hooks["PreToolUse"]}
+        self.assertIn("block-db-access.py", pre["Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob"][0])
+        self.assertTrue(any("graph-hook.py" in c and c.endswith("nudge") for c in pre["Grep|Glob"]))
+        start = [h["command"] for e in hooks["SessionStart"] for h in e["hooks"]]
+        self.assertTrue(any("graph-hook.py" in c and c.endswith("refresh") for c in start))
+
+    def test_nudge_hook_is_advisory_throttled_and_never_blocks(self):
+        import uuid
+        run_scaffold(self.target, base_answers())
+        stdin = json.dumps({"session_id": f"t-{uuid.uuid4().hex}", "tool_name": "Grep", "tool_input": {"pattern": "x"}})
+        first = self._hook("nudge", stdin)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        out = json.loads(first.stdout)["hookSpecificOutput"]
+        self.assertEqual(out["hookEventName"], "PreToolUse")
+        self.assertIn("build-graph.py", out["additionalContext"])
+        self.assertNotIn("permissionDecision", out)
+        second = self._hook("nudge", stdin)           # same session: quiet until the 4th search
+        self.assertEqual((second.returncode, second.stdout.strip()), (0, ""))
+        for _ in range(2):
+            self._hook("nudge", stdin)
+        self.assertIn("additionalContext", self._hook("nudge", stdin).stdout)   # 5th call = nudge again
+        bad = self._hook("nudge", "not json at all")
+        self.assertEqual(bad.returncode, 0)
+        self.assertEqual(self._hook("unknown-mode").returncode, 0)
+
+    def test_nudge_hook_tells_the_agent_to_build_a_missing_graph(self):
+        import uuid
+        run_scaffold(self.target, base_answers())
+        shutil.rmtree(self.target / "docs" / "knowledge-graph" / "graph.json", ignore_errors=True)
+        (self.target / "docs" / "knowledge-graph" / "graph.json").unlink()
+        out = self._hook("nudge", json.dumps({"session_id": f"t-{uuid.uuid4().hex}"}))
+        self.assertEqual(out.returncode, 0)
+        self.assertIn("not been built", json.loads(out.stdout)["hookSpecificOutput"]["additionalContext"])
+
+    def test_refresh_hook_rebuilds_a_stale_graph_and_reports_when_current(self):
+        run_scaffold(self.target, base_answers())
+        current = json.loads(self._hook("refresh").stdout)["hookSpecificOutput"]
+        self.assertEqual(current["hookEventName"], "SessionStart")
+        self.assertIn("up to date", current["additionalContext"])
+        (self.target / "src").mkdir()
+        (self.target / "src" / "new_module.py").write_text("def f(): pass\n", encoding="utf-8")
+        rebuilt = json.loads(self._hook("refresh").stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("rebuilt", rebuilt)
+        graph = json.loads((self.target / "docs" / "knowledge-graph" / "graph.json").read_text(encoding="utf-8"))
+        self.assertIn("src/new_module.py", {n["id"] for n in graph["nodes"]})
+        self.assertIn("up to date", json.loads(self._hook("refresh").stdout)["hookSpecificOutput"]["additionalContext"])
+
+    def test_refresh_hook_is_silent_when_the_graph_script_is_missing(self):
+        run_scaffold(self.target, base_answers())
+        (self.target / ".claude" / "scripts" / "build-graph.py").unlink()
+        r = self._hook("refresh")
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, ""))
+
+    def test_merge_settings_adds_the_graph_hooks_to_an_older_settings_file(self):
+        run_scaffold(self.target, base_answers())
+        settings_path = self.target / ".claude" / "settings.json"
+        old = json.loads(settings_path.read_text())
+        old["hooks"].pop("SessionStart")
+        old["hooks"]["PreToolUse"] = [e for e in old["hooks"]["PreToolUse"] if e["matcher"] != "Grep|Glob"]
+        old["hooks"]["PreToolUse"].append({"matcher": "Bash", "hooks": [{"type": "command", "command": "my-own-hook"}]})
+        settings_path.write_text(json.dumps(old, indent=2), encoding="utf-8")
+        r = run_scaffold(self.target, base_answers(), "--merge-settings")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        merged = json.loads(settings_path.read_text())["hooks"]
+        commands = [h["command"] for e in merged["PreToolUse"] for h in e["hooks"]]
+        self.assertIn("my-own-hook", commands)
+        self.assertTrue(any("graph-hook.py" in c and c.endswith("nudge") for c in commands))
+        self.assertEqual(sum("block-db-access.py" in c for c in commands), 1)
+        self.assertTrue(any("graph-hook.py" in c for e in merged["SessionStart"] for h in e["hooks"] for c in [h["command"]]))
 
     def test_agents_carry_external_content_rule(self):
         r = run_scaffold(self.target, base_answers(HAS_UI="yes"))

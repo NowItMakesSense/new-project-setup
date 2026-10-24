@@ -23,7 +23,6 @@ Ask one topic at a time. Skip only what the user already stated explicitly. Neve
 | `COMPLIANCE` | Regulatory/security constraints (LGPD, GDPR, PCI, HIPAA, none)? | |
 | `TEAM` | Solo or team? Review process? | |
 | `PYTHON_CMD` | Python command available for the hook (`python`, `python3`, `py`)? | Required even if the project's own stack has no Python - the DB-guard hook is Python-only and runs on every tool call regardless of language. Run `<answer> --version` yourself (or ask the user to) before recording it; don't just take the name on faith - `verify_setup.py` checks it resolves on PATH, but catching a typo here saves a failed verify later. |
-| `NPX_CMD` | npx command for the knowledge-graph MCP memory server, or `none` if Node.js isn't available? | Try `npx --version` yourself first (look before asking); only ask if that's inconclusive. `none` disables `mcpServers` and falls back to a markdown-only graph. |
 | `HAS_UI` | Does this project have a user-facing UI (web/mobile/desktop front-end)? | `yes`/`no`. Gates the front-end team: the `designer`, `frontend` and `ui-reviewer` agents plus the `frontend-craft` skill they share. For their full depth, also recommend installing the source skills globally: `npx skills@latest add emilkowalski/skills -g` and `npx skills@latest add Leonxlnx/taste-skill -g` (optional - the agents work from `frontend-craft` alone). |
 | `MODEL_PRIORITY` | Optimize the agent team for `cost`, `balanced`, or `quality`? | Sets the default model tier per agent (`cost` = no `opus` anywhere; `balanced` = `opus` for architect/security/reviewer/debug, default; `quality` = `opus` also for domain/knowledge-graph). Still overridable per project later in `/orchestrate`. |
 | `COVERAGE_THRESHOLD` | Minimum test coverage percentage to enforce in CI, or `none`? | A real number wired into `devops-docs`'s CI step and `qa`'s report, not just a prose mention |
@@ -52,7 +51,6 @@ Show a table of all answers (including `TBD`s) and get explicit approval before 
   "COMPLIANCE": "none",
   "TEAM": "solo",
   "PYTHON_CMD": "python",
-  "NPX_CMD": "npx",
   "HAS_UI": "no",
   "MODEL_PRIORITY": "balanced",
   "COVERAGE_THRESHOLD": "80",
