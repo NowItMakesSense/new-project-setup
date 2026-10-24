@@ -64,6 +64,10 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
 | `.claude/skills/spec-writer` | Writes requirements/design/tasks specs per feature |
+| `.claude/skills/to-spec`, `to-tickets` | PRD after planning (no second interview); tracer-bullet tasks with `Blocked by` |
+| `.claude/skills/review-change` | Two-axis (Standards + Spec) review of the diff since a fixed point |
+| `.claude/skills/launch-readiness` | Phase 8 checklist: performance, observability, rollout/rollback, docs |
+| `.claude/scripts/index-docs.py`, `spec-state.py` | Graph-first document lookup; per-feature state for `/orchestrate` resume |
 | `.claude/skills/frontend-craft` + `references/` (only when `HAS_UI` is yes) | House rules the front-end team preloads: art direction, app screens, type/colour/surfaces, motion, worst-case data, the Before/After/Why review format - distilled from Emil Kowalski's skills and taste-skill (both MIT), deferring to them when installed globally |
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults deliberately, with an ADR - never the DB-access directive |
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |

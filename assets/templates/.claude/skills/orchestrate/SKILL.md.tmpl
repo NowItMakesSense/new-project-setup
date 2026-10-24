@@ -1,15 +1,24 @@
 ---
 name: orchestrate
-description: Orchestrate the full software development workflow of this project by delegating to specialist subagents, with human approval gates between phases (discovery, specs, architecture, tasks, TDD, review, security, release). Use when the user wants to build a feature or start/continue the project workflow, says "orchestrate", "start development", "next phase", or "implement feature".
+description: Orchestrate the full software development workflow of this project by delegating to specialist subagents, with human approval gates between phases (discovery, specs, architecture, tasks, TDD, review, security, release). Use when the user wants to build a feature or start/continue the project workflow, says "orchestrate", "start development", "next phase", "continue", or "implement feature". Accepts an argument: a spec path or feature slug to resume (`/orchestrate docs/specs/billing/prd.md`), or free text describing what the client wants (`/orchestrate "export invoices as PDF"`).
+argument-hint: "[spec path | feature slug | what the client wants]"
 ---
 
 # Orchestrator
 
 Coordinate delegation; never write production code or touch the database directly (see CLAUDE.md prime directives). **Ask, never assume.**
 
+## Arguments and resuming (read first)
+`$ARGUMENTS` decides where to begin; whichever form it takes, you end up with the *evidence on disk* and a human confirmation, never a guess:
+- **A spec path or feature slug** (`docs/specs/<feature>/...` or `<feature>`): run `{{PYTHON_CMD}} .claude/scripts/spec-state.py --spec <arg>`. It reports which artifacts exist and are approved, task progress, the frontier of unblocked tasks, blocking findings and the next phase.
+- **Free text** (what the client wants): first look for an existing feature that already covers it - `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <key terms>` and `{{PYTHON_CMD}} .claude/scripts/spec-state.py`. If one matches, treat it as the first form (resume, do not restart). If none does, this is a new feature: its text is the seed for `/plan-grill` (the interview still runs, starting from that text instead of a blank page).
+- **Nothing**: run `{{PYTHON_CMD}} .claude/scripts/spec-state.py` for every feature and let the user pick.
+
+**Resume rule.** Already-created, approved artifacts are the starting point: never regenerate them, never redo a `done` task, never skip a gate that is not recorded as passed. Continue at the reported next phase and, in phase 5, at the frontier (tasks whose `Blocked by` are all `done`). If an artifact exists but looks inconsistent with another (e.g. tasks reference a requirement that changed), stop and show the user the discrepancy instead of choosing. Show the detected state and the proposed next step, and get a yes before acting.
+
 ## Start
-1. Read `CLAUDE.md` and `docs/specs/STATUS.md` (the project index - create it if missing). It should only ever hold features still in flight; if a row's own feature-level status already says `Released`/`Reverted`, see "Archiving" below before moving on.
-2. Ask the user which feature/phase to work on. Do not infer. Follow `docs/specs/STATUS.md`'s own "Concurrency (lease convention)" section - set/clear the `Lease` field on every write to a row there, including later in this workflow, not just here at Start.
+1. Read `CLAUDE.md` and `docs/specs/STATUS.md` (the project index - create it if missing). It should only ever hold features still in flight; if a row's own feature-level status already says `Released`/`Reverted`, see "Archiving" below before moving on. Find documents through the docs index (`docs/knowledge-graph/docs-index.md`, or `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <term>`) and the graph before grepping or opening files; if the index is stale (`index-docs.py --check` fails), refresh it first.
+2. Establish the feature/phase: from `$ARGUMENTS` as above; otherwise ask the user which feature/phase to work on. Do not infer. Follow `docs/specs/STATUS.md`'s own "Concurrency (lease convention)" section - set/clear the `Lease` field on every write to a row there, including later in this workflow, not just here at Start.
 3. Classify the change size with the user - see "Change size" below. This decides whether step 4 even applies.
 4. If Standard: read (or create) that feature's own `docs/specs/<feature>/STATUS.md` (template: `docs/specs/_templates/feature-status.md`) and `docs/specs/discovery.md`. If Trivial: skip this - there is no feature directory.
 5. (Standard only) If discovery is missing or has `TBD`/open questions -> run `/plan-grill` first.
@@ -39,11 +48,11 @@ If a "Trivial" change turns out to touch more than first thought (a behavior cha
 | # | Phase | Delegate to | Output | Gate |
 |---|---|---|---|---|
 | 1 | Discovery | `planner` + `/plan-grill`; `knowledge-graph` seeds/retrofits | `docs/specs/discovery.md`; initial knowledge graph + `docs/knowledge-graph/graph.html` | User confirms summary |
-| 2 | Requirements | `planner` + `/spec-writer` | `requirements.md` | User approves |
+| 2 | Spec & requirements | `planner` + `/to-spec` (PRD) + `/spec-writer` | `prd.md` (problem, solution, user stories, implementation/testing decisions), then `requirements.md` (every user story -> REQ-ID) | User approves each |
 | 3 | Architecture & domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md` (incl. feature diagram), ADRs, glossary, threat model, updated knowledge graph (and its regenerated `graph.html`), `Database/` update + `overview.html` (if the feature touches UI/DB) | User approves |
-| 4 | Tasks | `planner` | `tasks.md` (TDD-sized) | User approves |
+| 4 | Tasks | `planner` + `/to-tickets` | `tasks.md`: tracer-bullet slices with `Blocked by`, `Demo`, `Status`; `check-traceability.py` clean | User approves |
 | 5 | TDD loop, per task | `test` (red) -> the task's `Owner` (green) -> the same owner (refactor) - `implementer`, or `frontend` for `Owner: frontend` tasks; `debug` if one pass of the debugging protocol doesn't resolve a failure | Code + tests | Tests green |
-| 6 | Review & QA | `reviewer`, `qa`, plus `ui-reviewer` when any task has `Owner: frontend` | Findings logged in `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD`; `check-traceability.py` run clean | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets threshold AND traceability check passes |
+| 6 | Review & QA | `reviewer` (`/review-change`: Standards + Spec axes), `qa`, plus `ui-reviewer` when any task has `Owner: frontend` | Findings logged in `findings-ledger.md`; integration/e2e/edge-case results; coverage % vs `COVERAGE_THRESHOLD`; `check-traceability.py` run clean | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets threshold AND traceability check passes |
 | 7 | Security | `security` | `security-report.md` (ASVS checklist); findings in the shared ledger | No `Open`/`Confirmed` Critical/High in the ledger |
 | 8 | CI/CD & docs | `devops-docs` | Pipeline, README, changelog | User confirms |
 | - | Retro | orchestrator, after phase 8 | `docs/specs/<feature>/retro.md` | Carried-forward items applied to STATUS.md/next `/plan-grill` |
@@ -55,9 +64,10 @@ If a "Trivial" change turns out to touch more than first thought (a behavior cha
 - A Critical/High finding in `findings-ledger.md` never blocks on its first report: relay it to the responsible agent (usually `implementer`) for a fix or a disputed response, then relay that response back to whichever agent raised it (`reviewer`/`qa`/`security`) for the final `Confirmed`/`Retracted` call. Only `Open` or `Confirmed` Critical/High rows block phases 6-7. That `Confirmed`/`Retracted` call is final between the two agents - if `implementer` still disagrees after `Confirmed`, don't loop them again; bring the disagreement to the user as the tie-breaker instead.
 - Subagent questions are relayed to the user (AskUserQuestion), never answered directly.
 - Route each phase-5 task by its `Owner:` line in `tasks.md`: `frontend` tasks go to `frontend` (which applies the `frontend-craft` house rules and checks the rendered result), everything else to `implementer`. A task with no owner goes back to `planner`. In phase 6, add `ui-reviewer` whenever the feature had a `frontend` task; its Before/After/Why findings go in the same ledger and follow the same Open/Confirmed/Retracted flow.
+- Phase 5 follows the frontier of `tasks.md`: pick tasks whose `Blocked by` are all `done`, and set a task's `Status` (`todo` -> `in-progress` -> `done`) in `tasks.md` as it moves - that is what lets a later session resume exactly where this one stopped. A task is `done` only after its tests ran green and you read the output.
 - For independent tasks worth running in parallel, see "Parallel implementation" below instead of relying on file-path judgment alone.
 - If one pass of `docs/debugging-protocol.md` by `implementer`/`qa` doesn't resolve a failure, delegate to `debug` instead of letting the same agent retry the same approach again.
-- After each phase, update that feature's own `docs/specs/<feature>/STATUS.md` (phase, decisions, open questions), and the row for this feature in the top-level `docs/specs/STATUS.md` index (phase, last updated) - follow the index's lease convention (set `Lease` before writing, clear it after) in case another session is touching the same row. Once that row's phase becomes `Released` or `Reverted`, move it to the archive instead of leaving it - see "Archiving" below.
+- After each phase, refresh the docs index (`{{PYTHON_CMD}} .claude/scripts/index-docs.py`, then `render-graph.py` if the graph changed) and update that feature's own `docs/specs/<feature>/STATUS.md` (phase, decisions, open questions), and the row for this feature in the top-level `docs/specs/STATUS.md` index (phase, last updated) - follow the index's lease convention (set `Lease` before writing, clear it after) in case another session is touching the same row. Once that row's phase becomes `Released` or `Reverted`, move it to the archive instead of leaving it - see "Archiving" below.
 - Before presenting a phase's artifact for the human gate, confirm the agent reports it re-read its own output (no empty required section, no open questions left in a doc about to be approved); send it back to the agent instead of forwarding an incomplete draft to the user.
 - If code must deviate from a spec: stop, update the spec, get approval, then continue.
 - If any agent reports it needs DB access or secrets (including a cloud secret-manager CLI call): refuse, explain, ask the user for a human-run alternative or a fake/fixture.

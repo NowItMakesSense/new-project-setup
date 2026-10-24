@@ -2,6 +2,19 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-24
+
+**Graph-first lookup, a real spec step after planning, a two-axis reviewer, and an orchestrator that resumes.**
+
+- **Documents in the graph:** new `.claude/scripts/index-docs.py` writes `docs/knowledge-graph/docs-index.md` + `docs-index.json` (kind, feature, status, summary, headings, REQ-IDs, domain entities mentioned per document). `--find <term>` ranks documents and entities so agents look things up instead of opening every file; `--check` detects a stale index. `render-graph.py` draws the documents as `document` nodes (view only). `CLAUDE.md`/`AGENTS.md`, `knowledge-graph`, `plan-grill` and the orchestrator are told to look there first.
+- **Specs after planning:** new `/to-spec` (discovery + conversation -> `prd.md`: problem, solution, user stories, implementation and testing decisions, confirmed test seams) and `/to-tickets` (tracer-bullet vertical slices with `Status`, `Blocked by`, `Demo`). `plan-grill` hands off to `/to-spec`; `spec-writer` derives REQ-IDs from the PRD's stories. `check-traceability.py` now also fails on a `Blocked by` pointing at a missing task and on dependency cycles.
+- **Review:** new `/review-change` skill (fixed-point diff; independent Standards and Spec passes; five lenses; Fowler smell baseline; severity and Nit labels; evidence required; anti-rationalization table) preloaded by `reviewer`, which can now write the ledger and run read-only git (it previously could not write the file it was told to write).
+- **Orchestrator:** `/orchestrate [spec path | feature slug | what the client wants]`. New `.claude/scripts/spec-state.py` reports artifacts, approvals, task progress, the unblocked frontier, blocking findings and the next phase; the orchestrator resumes from it (never regenerates approved artifacts or redoes `done` tasks) and confirms with the user first.
+- **`launch-readiness` skill** (preloaded by `devops-docs`): phase 8 checklist for performance vs NFR targets, observability, rollout/rollback, migration safety, docs/ADRs.
+- Fixes found by running the new scripts on a real scaffold: Windows console encoding in `--find`/`spec-state`, a stray control character in the dependency regex, no `__pycache__` left in the project.
+- Docs (`SKILL.md`, `references/workflow.md`, `references/spec-format.md`) updated; two structural tests catch dangling script/skill references and invalid skill frontmatter.
+- Tests: 76 passing (11 new).
+
 ## 2026-10-23 (2)
 
 **Database access control is now part of the generated design, not left implicit.** In a real project, a review of the database rules found no roles or privileges defined anywhere: nothing said which user the application connects as, who applies migrations, or what each component may do. The Docker Compose file an agent then wrote connected the API as the cluster superuser (`POSTGRES_USER`), because nothing in the scaffold asked for anything else.

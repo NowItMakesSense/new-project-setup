@@ -1,0 +1,21 @@
+---
+name: to-tickets
+description: Break an approved spec (prd.md, requirements.md, design.md) into tracer-bullet tasks in tasks.md - thin vertical slices with explicit "Blocked by" edges, so work can proceed along the frontier of unblocked tasks. Use for phase 4, or when the user says "tasks", "tickets", "break this down", "to-tickets".
+---
+
+# to-tickets
+
+Turn the approved spec into `docs/specs/<feature>/tasks.md` (template: `docs/specs/_templates/tasks.md`). Each task is a ticket: it can be picked up, finished and demoed on its own.
+
+## Process
+1. **Gather.** Read the feature's `prd.md`, `requirements.md` and `design.md` (find them via `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <feature>` if unsure), plus `docs/glossary.md` and ADRs. If something needed is missing, ask - don't invent.
+2. **Prefactor first.** If the code the feature touches needs restructuring to make the change easy, make that its own first task (behavior-preserving, tests stay green) instead of burying it in a feature task.
+3. **Draft vertical slices.** A slice is a complete path through every layer it needs (UI/API -> domain -> persistence port), so it is independently demoable. Reject horizontal tasks ("add all the models"). Each slice must fit one context window and one red-green-refactor cycle. For a wide refactor use *expand -> migrate in batches -> contract* rather than one big task.
+4. **Fill each task**: `Status: todo`, `Covers` (REQ-IDs), `Blocked by` (task IDs or `none` - only real dependencies), `Demo` (what a reviewer sees working), `Owner` (`frontend` for screens/components/styles/motion when this project has that agent, else `implementer`), RED/GREEN/REFACTOR, definition of done. No file paths or code snippets - they go stale.
+5. **Quiz the user** on granularity and on the blocking edges (too coarse? a missing dependency? two tasks that could run in parallel?). Iterate until approved.
+6. **Check before presenting**: run `{{PYTHON_CMD}} .claude/scripts/check-traceability.py --feature <feature-slug>` - it flags a REQ-ID with no covering task, a task citing a REQ-ID that doesn't exist, a `Blocked by` pointing at a missing task, and dependency cycles. Fix every failure yourself before the human gate.
+7. Set `Status: Approved` (date, approver) only after explicit approval, then refresh the docs index (`{{PYTHON_CMD}} .claude/scripts/index-docs.py`).
+
+## Rules
+- Never modify an approved `requirements.md`/`design.md` from here; if slicing exposes a spec gap, stop and send it back to `spec-writer`.
+- Execution order is the frontier (tasks whose blockers are all `done`), not file order. Tasks with no shared files and no ordering dependency are candidates for parallel worktrees (`orchestrate/references/parallel-implementation.md`).

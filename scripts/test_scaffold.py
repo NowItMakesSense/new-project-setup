@@ -655,6 +655,161 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn("Bash", tools_line)
         self.assertIn('python .claude/scripts/render-graph.py --title "demo"', agent)
 
+    def _write_feature(self, name="billing", tasks=None, req_status="Approved"):
+        fdir = self.target / "docs" / "specs" / name
+        fdir.mkdir(parents=True, exist_ok=True)
+        (fdir / "prd.md").write_text("# Spec (PRD): billing\n\nStatus: Approved\n\nInvoice customers monthly.\n", encoding="utf-8")
+        (fdir / "requirements.md").write_text(
+            f"# Requirements: billing\n\nStatus: {req_status}\n\n- REQ-001: WHEN x THE SYSTEM SHALL y.\n\n### REQ-001\n", encoding="utf-8")
+        (fdir / "design.md").write_text("# Design\n\nStatus: Approved\n", encoding="utf-8")
+        if tasks is not None:
+            (fdir / "tasks.md").write_text("# Tasks\n\nStatus: Approved\n\n" + tasks, encoding="utf-8")
+        return fdir
+
+    def _write_graph(self):
+        kg = self.target / "docs" / "knowledge-graph"
+        kg.mkdir(parents=True, exist_ok=True)
+        (kg / "graph.jsonl").write_text(json.dumps({"type": "entity", "name": "Invoice", "entityType": "aggregate",
+                                                    "observations": ["defined in prd.md"]}) + "\n", encoding="utf-8")
+        return kg
+
+    def test_docs_index_finds_documents_and_entities(self):
+        run_scaffold(self.target, base_answers())
+        self._write_feature(tasks="## T-001: a\n- Status: done\n- Covers: REQ-001\n- Blocked by: none\n")
+        kg = self._write_graph()
+        script = self.target / ".claude" / "scripts" / "index-docs.py"
+        r = subprocess.run([PY, str(script)], capture_output=True, text=True, cwd=self.target)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        index = json.loads((kg / "docs-index.json").read_text(encoding="utf-8"))
+        prd = next(d for d in index["docs"] if d["path"] == "docs/specs/billing/prd.md")
+        self.assertEqual((prd["kind"], prd["feature"], prd["status"]), ("prd", "billing", "Approved"))
+        self.assertIn("Invoice", prd["mentions"])
+        md = (kg / "docs-index.md").read_text(encoding="utf-8")
+        self.assertIn("docs/specs/billing/requirements.md", md)
+        f = subprocess.run([PY, str(script), "--find", "invoice"], capture_output=True, text=True, cwd=self.target)
+        self.assertIn("Invoice", f.stdout)
+        self.assertIn("docs/specs/billing/prd.md", f.stdout)
+        self.assertEqual(subprocess.run([PY, str(script), "--check"], cwd=self.target, capture_output=True).returncode, 0)
+        before = (kg / "docs-index.md").read_text(encoding="utf-8")
+        subprocess.run([PY, str(script)], cwd=self.target, capture_output=True)
+        self.assertEqual(before, (kg / "docs-index.md").read_text(encoding="utf-8"))
+        (self.target / "docs" / "late.md").write_text("# Late\n", encoding="utf-8")
+        self.assertEqual(subprocess.run([PY, str(script), "--check"], cwd=self.target, capture_output=True).returncode, 1)
+
+    def test_render_graph_draws_documents_from_the_index(self):
+        run_scaffold(self.target, base_answers())
+        self._write_feature()
+        kg = self._write_graph()
+        scripts = self.target / ".claude" / "scripts"
+        subprocess.run([PY, str(scripts / "index-docs.py")], cwd=self.target, check=True, capture_output=True)
+        r = subprocess.run([PY, str(scripts / "render-graph.py"), "--graph-dir", str(kg)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("doc:docs/specs/billing/prd.md", (kg / "graph.html").read_text(encoding="utf-8"))
+        self.assertNotIn("doc:", (kg / "graph.jsonl").read_text(encoding="utf-8"))
+
+    def test_spec_state_reports_frontier_and_resumes_by_path(self):
+        run_scaffold(self.target, base_answers())
+        tasks = ("## T-001: first\n- Status: done\n- Covers: REQ-001\n- Blocked by: none\n\n"
+                 "## T-002: second\n- Status: todo\n- Covers: REQ-001\n- Blocked by: T-001\n\n"
+                 "## T-003: third\n- Status: todo\n- Covers: REQ-001\n- Blocked by: T-002\n")
+        self._write_feature(tasks=tasks)
+        script = self.target / ".claude" / "scripts" / "spec-state.py"
+        r = subprocess.run([PY, str(script), "--spec", "docs/specs/billing/prd.md", "--json"],
+                           capture_output=True, text=True, cwd=self.target)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        st = json.loads(r.stdout)["features"][0]
+        self.assertEqual(st["tasks"]["frontier"], ["T-002"])
+        self.assertEqual(st["tasks"]["blocked"], ["T-003"])
+        self.assertTrue(st["next_phase"].startswith("5"), st["next_phase"])
+        bad = subprocess.run([PY, str(script), "--spec", "nope"], capture_output=True, text=True, cwd=self.target)
+        self.assertNotEqual(bad.returncode, 0)
+
+    def test_spec_state_starts_at_to_spec_for_a_fresh_feature(self):
+        run_scaffold(self.target, base_answers())
+        (self.target / "docs" / "specs" / "empty").mkdir()
+        script = self.target / ".claude" / "scripts" / "spec-state.py"
+        r = subprocess.run([PY, str(script), "--feature", "empty"], capture_output=True, text=True, cwd=self.target)
+        self.assertIn("/to-spec", r.stdout)
+
+    def test_traceability_flags_broken_and_cyclic_blocked_by(self):
+        run_scaffold(self.target, base_answers())
+        tasks = ("## T-001: a\n- Covers: REQ-001\n- Blocked by: T-002\n\n"
+                 "## T-002: b\n- Covers: REQ-001\n- Blocked by: T-001, T-009\n")
+        self._write_feature(tasks=tasks)
+        script = self.target / ".claude" / "scripts" / "check-traceability.py"
+        r = subprocess.run([PY, str(script), "--specs-dir", str(self.target / "docs" / "specs")], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("T-009", r.stdout)
+        self.assertIn("cycle", r.stdout)
+
+    def test_post_planning_skills_and_prd_template_scaffolded(self):
+        r = run_scaffold(self.target, base_answers())
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        skills = self.target / ".claude" / "skills"
+        for name in ("to-spec", "to-tickets", "review-change"):
+            body = (skills / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn(f"name: {name}", body)
+            self.assertNotIn("{{", body)
+        specs = self.target / "docs" / "specs" / "_templates"
+        self.assertIn("User stories", (specs / "prd.md").read_text(encoding="utf-8"))
+        self.assertIn("Blocked by", (specs / "tasks.md").read_text(encoding="utf-8"))
+        self.assertIn("/to-spec", (skills / "plan-grill" / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertIn("/to-tickets", (skills / "spec-writer" / "SKILL.md").read_text(encoding="utf-8"))
+
+    def test_reviewer_reviews_two_axes_and_can_write_the_ledger(self):
+        run_scaffold(self.target, base_answers())
+        agent = (self.target / ".claude" / "agents" / "reviewer.md").read_text(encoding="utf-8")
+        self.assertIn("Standards", agent)
+        self.assertIn("Spec", agent)
+        self.assertIn("- review-change", agent)
+        tools = re.search(r"^tools:\s*(.+)$", agent, re.M).group(1)
+        self.assertIn("Write", tools)
+        self.assertIn("Bash", tools)
+
+    def test_orchestrate_takes_an_argument_and_resumes(self):
+        run_scaffold(self.target, base_answers())
+        body = (self.target / ".claude" / "skills" / "orchestrate" / "SKILL.md").read_text(encoding="utf-8")
+        for needle in ("argument-hint", "$ARGUMENTS", "spec-state.py", "never regenerate"):
+            self.assertIn(needle, body)
+
+    def test_agents_are_told_to_look_in_the_graph_first(self):
+        run_scaffold(self.target, base_answers())
+        for f in ("CLAUDE.md", "AGENTS.md"):
+            self.assertIn("index-docs.py --find", (self.target / f).read_text(encoding="utf-8"), f)
+        kg = (self.target / ".claude" / "agents" / "knowledge-graph.md").read_text(encoding="utf-8")
+        self.assertIn("docs-index.md", kg)
+
+    def test_no_dangling_script_or_skill_references(self):
+        """Structural lint: every `.claude/scripts/X` and `/skill` a generated doc points to exists."""
+        run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        skills = {d.name for d in (self.target / ".claude" / "skills").iterdir()}
+        builtin = {"orchestrate", "plan-grill", "spec-writer", "to-spec", "to-tickets", "review-change",
+                   "amend-constitution", "grill-me"}
+        problems = []
+        for f in self.target.rglob("*.md"):
+            if ".git" in f.parts or "node_modules" in f.parts:
+                continue
+            text = f.read_text(encoding="utf-8")
+            for script in set(re.findall(r"\.claude/scripts/([\w.-]+\.(?:py|html))", text)):
+                if not (self.target / ".claude" / "scripts" / script).is_file():
+                    problems.append(f"{f.relative_to(self.target)} -> scripts/{script}")
+            for sk in set(re.findall(r"`/(to-spec|to-tickets|review-change|spec-writer|plan-grill|amend-constitution|launch-readiness)`", text)):
+                if sk not in skills:
+                    problems.append(f"{f.relative_to(self.target)} -> /{sk}")
+        self.assertEqual(problems, [])
+        self.assertTrue(builtin <= skills | {"grill-me"})
+
+    def test_every_skill_has_valid_frontmatter_and_devops_preloads_launch_readiness(self):
+        run_scaffold(self.target, base_answers(HAS_UI="yes"))
+        for d in sorted((self.target / ".claude" / "skills").iterdir()):
+            body = (d / "SKILL.md").read_text(encoding="utf-8")
+            m = re.match(r"---\nname: (.+)\ndescription: (.+)\n(?:.*\n)*?---\n", body)
+            self.assertIsNotNone(m, d.name)
+            self.assertEqual(m.group(1).strip(), d.name)
+            self.assertGreater(len(m.group(2)), 40, d.name)
+        agent = (self.target / ".claude" / "agents" / "devops-docs.md").read_text(encoding="utf-8")
+        self.assertIn("- launch-readiness", agent)
+
     def test_agents_carry_external_content_rule(self):
         r = run_scaffold(self.target, base_answers(HAS_UI="yes"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
