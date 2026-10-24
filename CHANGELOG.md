@@ -2,6 +2,17 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-24 (3)
+
+**Fix: the project graph no longer leaves most files unrelated.** In a real C#/.NET project 87 of 273 files were orphans (all `Database/` constraint files and most C# sources): only Python and JS/TS imports were understood, and database objects are named in prose without a path.
+
+- **Types by name:** a code file that names a type declared in exactly one other file (C#, Java, Go, Kotlin, ... any non-Python language) gets a `uses` edge (INFERRED). `sealed`, `internal`, `partial`, `readonly`, `record` and `data` declarations are now recognised as symbols.
+- **Tests:** `FooTests.cs` / `FooSpec` map to `Foo` (the CamelCase suffix is stripped), not only `test_foo` / `foo.test`.
+- **Database objects:** a document naming `pk_player`, `ux_player_email` or `accounts.player` (the file stem under `Database/`) gets a `mentions` edge (EXTRACTED) to that file.
+- **Last resort:** a file still unrelated is attached to the nearest `README.md`/`index.md` above it (`part_of`, INFERRED). Files with no README above them stay listed as orphans.
+- Result on that project: 429 -> 1044 relationships, 87 -> 4 orphans. One new test.
+- **Projects scaffolded before this fix:** copy `.claude/scripts/build-graph.py` and run it.
+
 ## 2026-10-24 (2)
 
 **The graph is now a map of the project's files and the relationships between them (graphify-style), with nothing left of the old domain-entity graph.**

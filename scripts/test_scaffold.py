@@ -631,6 +631,35 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotIn("hunter3", text, out)
         self.assertIn("<title>Shop", (root / "docs" / "knowledge-graph" / "graph.html").read_text(encoding="utf-8"))
 
+    def test_build_graph_relates_csharp_sources_and_database_objects(self):
+        """C# has no import graph and Database/ files are only named in prose: neither may end up orphaned."""
+        root = self._graph_project()
+        files = {
+            "src/Domain/Email.cs": "namespace Shop;\npublic sealed record Email(string Value);\n",
+            "src/Domain/Player.cs": "namespace Shop;\ninternal sealed partial class Player { Email email; }\n",
+            "tests/EmailTests.cs": "namespace Shop;\npublic class EmailTests { Email e; }\n",
+            "Database/README.md": "# Database\n",
+            "Database/er-diagram.md": "# ER\n\nplayer [PK pk_player, unique ux_player_email]\n",
+            "Database/primary-keys/pk_player.md": "# pk_player\n\nTable: accounts.player\n",
+            "Database/indexes/ux_player_email.md": "# ux_player_email\n\nTable: accounts.player\n",
+            "Database/tables/accounts.player.md": "# accounts.player\n\nPK `pk_player`.\n",
+            "Database/notes/lonely_note.md": "# lonely\n",
+            "Database/notes/README.md": "# Notes\n",
+        }
+        for rel, text in files.items():
+            f = root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text, encoding="utf-8")
+        self.assertEqual(self._graph(root).returncode, 0)
+        graph, edges = self._edges(root)
+        self.assertIn(("src/Domain/Player.cs", "src/Domain/Email.cs", "uses"), edges)
+        self.assertIn(("tests/EmailTests.cs", "src/Domain/Email.cs", "tests"), edges)
+        self.assertEqual(edges[("Database/er-diagram.md", "Database/primary-keys/pk_player.md", "mentions")], "EXTRACTED")
+        self.assertIn(("Database/er-diagram.md", "Database/indexes/ux_player_email.md", "mentions"), edges)
+        self.assertIn(("Database/tables/accounts.player.md", "Database/primary-keys/pk_player.md", "mentions"), edges)
+        # a file nothing names still belongs to its folder's README
+        self.assertEqual(edges[("Database/notes/lonely_note.md", "Database/notes/README.md", "part_of")], "INFERRED")
+
     def test_build_graph_is_deterministic_and_check_detects_staleness(self):
         root = self._graph_project()
         self.assertEqual(self._graph(root, "check").returncode, 1)          # nothing built yet
