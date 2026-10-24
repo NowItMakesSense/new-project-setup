@@ -13,6 +13,9 @@ When the graph comes from `graph.jsonl`, the script also rewrites `graph.md` as 
 markdown export of it (same "Entities"/"Relations" tables the fallback reads), so the two never drift.
 In fallback mode (no `graph.jsonl`) `graph.md` is the source of truth and is left untouched.
 
+If `docs-index.json` (written by index-docs.py) sits next to the graph, its documents are drawn too, as
+`document` nodes linked to the concepts they mention (view only; the graph files are untouched).
+
 Usage: render-graph.py [--graph-dir docs/knowledge-graph] [--out <path>]
 Exit code 0 when the page was written (an empty graph still produces a page). Standard library only.
 """
@@ -104,6 +107,24 @@ def build_graph(entities: list, relations: list) -> dict:
     return {"nodes": list(nodes.values()), "links": links}
 
 
+def add_documents(graph: dict, index_path: Path) -> int:
+    """Overlay the document index (index-docs.py) on the view: one `document` node per file, linked by
+    `mentions` to the domain concepts it names. View-only - graph.jsonl/graph.md never get these."""
+    if not index_path.is_file():
+        return 0
+    try:
+        docs = json.loads(index_path.read_text(encoding="utf-8")).get("docs", [])
+    except (json.JSONDecodeError, OSError):
+        return 0
+    known = {n["id"] for n in graph["nodes"]}
+    for d in docs:
+        doc_id = f"doc:{d['path']}"
+        obs = [f"{d['kind']}{' - ' + d['status'] if d.get('status') else ''}", d.get("summary", "")]
+        graph["nodes"].append({"id": doc_id, "type": "document", "observations": [o for o in obs if o]})
+        graph["links"] += [{"source": doc_id, "target": m, "label": "mentions"} for m in d.get("mentions", []) if m in known]
+    return len(docs)
+
+
 def render(graph: dict, title: str) -> str:
     if not TEMPLATE.is_file():
         sys.exit(f"{TEMPLATE} not found - it ships next to this script; re-run the scaffold to restore it")
@@ -157,11 +178,13 @@ def main() -> None:
         print(f"INFO  neither {jsonl} nor {md} exists - writing an empty graph page")
 
     graph = build_graph(entities, relations)
+    n_docs = add_documents(graph, graph_dir / "docs-index.json")
     out = Path(args.out) if args.out else graph_dir / "graph.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(graph, args.title), encoding="utf-8", newline="\n")
     undeclared = sum(1 for n in graph["nodes"] if n["type"] == "undeclared")
-    print(f"Wrote {out} ({len(graph['nodes'])} entities, {len(graph['links'])} relations)")
+    docs_note = f", {n_docs} documents drawn" if n_docs else ""
+    print(f"Wrote {out} ({len(graph['nodes']) - n_docs} entities, {len(graph['links'])} relations{docs_note})")
     if undeclared:
         print(f"WARN  {undeclared} node(s) appear only as a relation endpoint, with no entity declared")
 

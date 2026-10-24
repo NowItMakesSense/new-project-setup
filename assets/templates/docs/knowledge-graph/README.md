@@ -18,6 +18,9 @@ This project keeps a **domain knowledge graph** - entities, value objects, aggre
 - The graph data is embedded in the page, but three.js and `3d-force-graph` (pinned versions) load from esm.sh - viewing it needs network access. Without it, the page lists every concept instead of going blank.
 - Concepts shown as grey wireframes and counted as `undeclared` in the top bar are relation endpoints with no entity of their own - usually a missing `create_entities` call.
 
+## Documents index (`docs-index.md`)
+The graph also covers the project's *documents*, so an agent finds the right one without opening them all. `.claude/scripts/index-docs.py` scans `docs/`, `Database/` and the root docs and writes `docs/knowledge-graph/docs-index.md` (table grouped by feature: path, kind, status, summary, REQ-IDs, domain concepts mentioned) and `docs-index.json`. `index-docs.py --find <term>` ranks documents and domain entities for a term; `--check` fails when the index is stale. Both files are generated and deterministic (content hash, no timestamp) - never edit them. `render-graph.py` draws the documents in the 3D view as `document` nodes linked to the concepts they mention; `graph.jsonl` itself is untouched.
+
 ## Who maintains it
 The `knowledge-graph` subagent (`.claude/agents/knowledge-graph.md`) is the only agent that calls the memory-server tools (`read_graph`, `search_nodes`, `open_nodes`, `create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_relations`, `delete_observations`). It collaborates with (and never contradicts) the `domain` agent, which identifies the concepts in prose during design; `knowledge-graph` persists and links them.
 

@@ -21,6 +21,9 @@ Test: `{{TEST_CMD}}` | Lint: `{{LINT_CMD}}` | Build: `{{BUILD_CMD}}` | Coverage 
 ## Where things live
 `docs/specs/` specs - `docs/adr/` decisions - `docs/glossary.md` domain language - `docs/knowledge-graph/` domain knowledge graph (MCP-backed only in Claude Code; see its README for the fallback) - `.claude/` Claude Code agents/skills/guards.
 
+## Finding things
+Look before you read: `docs/knowledge-graph/docs-index.md` lists every doc (kind, status, summary, REQ-IDs, domain concepts mentioned); `python .claude/scripts/index-docs.py --find <term>` searches it plus the domain graph; `python .claude/scripts/spec-state.py` shows each feature's phase and next unblocked tasks. Open only what these point to.
+
 ## Testing and debugging
 Follow `docs/test-strategy.md` for test pyramid/fixture conventions and `docs/debugging-protocol.md` (reproduce -> root cause -> minimal hypothesis -> fix + regression test) whenever something fails unexpectedly - never patch what you haven't understood.
 `docs/security-policy.md` is the project's security baseline (DB guard, external-content rule, general practices).

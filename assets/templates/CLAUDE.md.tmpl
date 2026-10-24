@@ -19,7 +19,7 @@
 Clean Code, Clean Architecture (dependencies point inward), DDD (ubiquitous language in `docs/glossary.md`), SOLID, strict TDD - **Iron Law: no production code without a failing test first** (red -> green -> refactor; if code was written before its test, delete it and redo it properly) - small PRs, {{VCS_BRANCHING}}. See `docs/test-strategy.md` for the test pyramid/fixture conventions and `docs/debugging-protocol.md` whenever something fails unexpectedly; `docs/security-policy.md` is the security baseline.
 
 ## Workflow
-Use `/plan-grill` for discovery, then `/orchestrate` to run the phases:
+Use `/plan-grill` for discovery, `/to-spec` for the feature's PRD, then `/orchestrate` (optionally with a spec path or what the client wants: `/orchestrate docs/specs/<feature>/prd.md`) to run the phases - it resumes from what already exists on disk:
 Discovery -> Specs -> Architecture/Domain -> Tasks -> TDD loop -> Review -> Security -> CI/CD & release.
 Each phase ends with a human approval gate. Details: `.claude/skills/orchestrate/SKILL.md`.
 
@@ -28,6 +28,9 @@ planner, architect, domain, test, qa, implementer, reviewer, security, devops-do
 Each agent file's `model:` frontmatter has a role-tiered default set at scaffold time by the `MODEL_PRIORITY` answer (`{{MODEL_PRIORITY}}` for this project: architect/security/reviewer/debug get the strongest tier, devops-docs the cheapest); `/orchestrate` asks once whether to keep those or override, and records the choice in `docs/specs/STATUS.md`.
 `knowledge-graph` persists the domain model (entities, value objects, aggregates, bounded contexts, relationships) in `docs/knowledge-graph/`, MCP-backed when Node.js/`npx` was available at setup (see `.claude/settings.json`).
 Review/QA/security findings share one running `findings-ledger.md` per feature (phases 6-7) - a Critical/High finding is disputable once before it blocks a gate (see `docs/specs/_templates/findings-ledger.md`).
+
+## Finding things (graph first)
+Don't open every file to find where something is documented. Look it up first: `docs/knowledge-graph/docs-index.md` (every spec, ADR and doc: kind, status, summary, REQ-IDs, the domain concepts it mentions) or `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <term>` (documents + domain entities, ranked). Read only what it points to; grep only when the index has no match. Where a feature stands: `{{PYTHON_CMD}} .claude/scripts/spec-state.py`. `knowledge-graph` keeps the index current; if `index-docs.py --check` says it is stale, refresh it before relying on it.
 
 ## Commands
 - Test: `{{TEST_CMD}}`

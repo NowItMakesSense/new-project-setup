@@ -2,6 +2,7 @@
 """Spec traceability check: every REQ-ID defined in a feature's requirements.md must have a
 Gherkin scenario and be covered by at least one task in tasks.md; every REQ-ID referenced from
 tasks.md must actually be defined in requirements.md (catches typos/drift between the two files).
+Each task's `Blocked by:` must name tasks that exist, with no dependency cycle.
 
 This only checks REQ-ID linkage between requirements.md/tasks.md - it does not (and, since the
 project's STACK varies, cannot generically) check that a real test file exists for each one.
@@ -19,6 +20,9 @@ REQ_DEF = re.compile(r"^-\s*(REQ-\d+)\s*:", re.M)
 REQ_SCENARIO_HEADER = re.compile(r"^###\s*(REQ-\d+)\s*$", re.M)
 REQ_COVERS = re.compile(r"Covers:\s*(.+)$", re.M)
 REQ_ID = re.compile(r"REQ-\d+")
+TASK_HEADER = re.compile(r"^##\s*(T-\d+)", re.M)
+TASK_ID = re.compile(r"T-\d+")
+BLOCKED_BY = re.compile(r"Blocked by:\s*(.+)$", re.M)
 SKIP_DIRS = {"_templates"}
 failures = []
 
@@ -27,6 +31,37 @@ def check(ok: bool, msg: str) -> None:
     print(("PASS " if ok else "FAIL ") + msg)
     if not ok:
         failures.append(msg)
+
+
+def check_dependencies(name: str, tasks_text: str) -> None:
+    """`Blocked by` must point at tasks that exist, and the dependency graph must be acyclic."""
+    sections = re.split(r"^(?=##\s*T-\d+)", tasks_text, flags=re.M)
+    deps = {}
+    for sec in sections:
+        head = TASK_HEADER.match(sec)
+        if head:
+            m = BLOCKED_BY.search(sec)
+            deps[head.group(1)] = set(TASK_ID.findall(m.group(1))) if m else set()
+    for task, blockers in sorted(deps.items()):
+        for b in sorted(blockers - set(deps)):
+            check(False, f"{name}: {task} is blocked by {b}, which is not a task in tasks.md")
+        if task in blockers:
+            check(False, f"{name}: {task} is blocked by itself")
+    state = {}
+
+    def visit(t, path):
+        if state.get(t) == 2 or t not in deps:
+            return
+        if state.get(t) == 1:
+            check(False, f"{name}: dependency cycle {' -> '.join(path + [t])}")
+            return
+        state[t] = 1
+        for b in sorted(deps[t]):
+            visit(b, path + [t])
+        state[t] = 2
+
+    for t in sorted(deps):
+        visit(t, [])
 
 
 def check_feature(feature_dir: Path) -> None:
@@ -57,6 +92,7 @@ def check_feature(feature_dir: Path) -> None:
 
     for req in sorted((covered | referenced_anywhere) - defined):
         check(False, f"{name}: tasks.md references {req}, which is not defined in requirements.md")
+    check_dependencies(name, tasks_text)
 
 
 def main() -> None:

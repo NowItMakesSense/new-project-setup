@@ -64,13 +64,17 @@ python <skill-dir>/scripts/retune.py --target <project-dir> --model-priority <co
 | `.claude/skills/orchestrate` | The orchestrator: 8-phase workflow with human gates |
 | `.claude/skills/plan-grill` | grill-me style planning interview (delegates to a real `grill-me` skill if installed) |
 | `.claude/skills/spec-writer` | Writes requirements/design/tasks specs per feature |
+| `.claude/skills/to-spec`, `to-tickets` | PRD after planning (no second interview); tracer-bullet tasks with `Blocked by` |
+| `.claude/skills/review-change` | Two-axis (Standards + Spec) review of the diff since a fixed point |
+| `.claude/skills/launch-readiness` | Phase 8 checklist: performance, observability, rollout/rollback, docs |
+| `.claude/scripts/index-docs.py`, `spec-state.py` | Graph-first document lookup; per-feature state for `/orchestrate` resume |
 | `.claude/skills/frontend-craft` + `references/` (only when `HAS_UI` is yes) | House rules the front-end team preloads: art direction, app screens, type/colour/surfaces, motion, worst-case data, the Before/After/Why review format - distilled from Emil Kowalski's skills and taste-skill (both MIT), deferring to them when installed globally |
 | `.claude/skills/amend-constitution` | Revises `CLAUDE.md` engineering defaults deliberately, with an ADR - never the DB-access directive |
 | `docs/specs`, `docs/adr`, `docs/glossary.md` | Spec-driven artifacts |
 | `docs/test-strategy.md`, `docs/debugging-protocol.md` | Test pyramid/fixture guide; 4-phase systematic-debugging protocol |
 | `docs/security-policy.md` | The project's security baseline (DB-guard layers, external-content rule, general practices, `COMPLIANCE` regime) - read by `architect`/`security`, cited by every `requirements.md` |
 | `docs/knowledge-graph/` | Domain model as a graph (MCP-backed when `NPX_CMD` is set; markdown fallback otherwise), plus its generated 3D view `graph.html` |
-| `Database/` (only when `DB_ENGINE` indicates a database) | Complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/` - owned by `architect`, updated per feature, never a live connection or real data |
+| `Database/` (only when `DB_ENGINE` indicates a database) | Complete, authoritative ER diagram (`er-diagram.md`) plus one file per DB object under `tables/`, `indexes/`, `foreign-keys/`, `primary-keys/`, `packages/`, `functions/`, plus `roles/` (database roles and a per-object privilege matrix, from a least-privilege baseline) - owned by `architect`, updated per feature, never a live connection or real data |
 | `docs/specs/<feature>/overview.html` (conditional) | Self-contained static HTML/SVG, no external dependency, produced per feature when it touches UI screens and/or the database - affected screens, feature-scoped ER diagram, affected `Database/` objects |
 | `docs/specs/_templates/security-report.md` | Per-feature ASVS checklist, filled by `security` |
 | `docs/specs/_templates/findings-ledger.md` | Shared reviewer/QA/security findings, with a one-time dispute before a Critical/High blocks a gate |

@@ -2,6 +2,35 @@
 
 This is this skill's own changelog (not shipped to generated projects).
 
+## 2026-10-24
+
+**Graph-first lookup, a real spec step after planning, a two-axis reviewer, and an orchestrator that resumes.**
+
+- **Documents in the graph:** new `.claude/scripts/index-docs.py` writes `docs/knowledge-graph/docs-index.md` + `docs-index.json` (kind, feature, status, summary, headings, REQ-IDs, domain entities mentioned per document). `--find <term>` ranks documents and entities so agents look things up instead of opening every file; `--check` detects a stale index. `render-graph.py` draws the documents as `document` nodes (view only). `CLAUDE.md`/`AGENTS.md`, `knowledge-graph`, `plan-grill` and the orchestrator are told to look there first.
+- **Specs after planning:** new `/to-spec` (discovery + conversation -> `prd.md`: problem, solution, user stories, implementation and testing decisions, confirmed test seams) and `/to-tickets` (tracer-bullet vertical slices with `Status`, `Blocked by`, `Demo`). `plan-grill` hands off to `/to-spec`; `spec-writer` derives REQ-IDs from the PRD's stories. `check-traceability.py` now also fails on a `Blocked by` pointing at a missing task and on dependency cycles.
+- **Review:** new `/review-change` skill (fixed-point diff; independent Standards and Spec passes; five lenses; Fowler smell baseline; severity and Nit labels; evidence required; anti-rationalization table) preloaded by `reviewer`, which can now write the ledger and run read-only git (it previously could not write the file it was told to write).
+- **Orchestrator:** `/orchestrate [spec path | feature slug | what the client wants]`. New `.claude/scripts/spec-state.py` reports artifacts, approvals, task progress, the unblocked frontier, blocking findings and the next phase; the orchestrator resumes from it (never regenerates approved artifacts or redoes `done` tasks) and confirms with the user first.
+- **`launch-readiness` skill** (preloaded by `devops-docs`): phase 8 checklist for performance vs NFR targets, observability, rollout/rollback, migration safety, docs/ADRs.
+- Fixes found by running the new scripts on a real scaffold: Windows console encoding in `--find`/`spec-state`, a stray control character in the dependency regex, no `__pycache__` left in the project.
+- Docs (`SKILL.md`, `references/workflow.md`, `references/spec-format.md`) updated; two structural tests catch dangling script/skill references and invalid skill frontmatter.
+- Tests: 76 passing (11 new).
+
+## 2026-10-23 (2)
+
+**Database access control is now part of the generated design, not left implicit.** In a real project, a review of the database rules found no roles or privileges defined anywhere: nothing said which user the application connects as, who applies migrations, or what each component may do. The Docker Compose file an agent then wrote connected the API as the cluster superuser (`POSTGRES_USER`), because nothing in the scaffold asked for anything else.
+
+- **New `Database/roles/` folder** (generated with the rest of `Database/`):
+  - its `README.md` sets the convention: one file per role, plus a project-wide `privilege-matrix.md`;
+  - it also carries the baseline every project starts from: bootstrap superuser for administration only; NOLOGIN owner plus a human-run migrator for DDL; a least-privilege runtime app role with no DDL and no migrations at startup; hardening (revoke PUBLIC, default privileges, fixed `search_path`); per-role timeouts and connection limits; TLS outside local dev; an explicit row-level-security decision; role scripts generated only as files, with passwords from the environment.
+- **`Database/README.md`:** lists `roles/` and adds the non-negotiable that access control is part of the schema.
+- **`architect`:** owns roles and the matrix, writes a new "Database access control" section in `design.md`, and reviews local-dev topology (Compose) against it.
+- **`design.md` template:** gains that section. The threat-model section names the database threats to cover: compromised app process, runtime DDL, no TLS, long queries, and backups keeping deleted personal data.
+- **`security` agent and `security-report.md`:** gain a "Database access control" check, done by static review only.
+- **`docs/security-policy.md` (template) and `references/security-policy.md`:** new section "System database access control". It also states that `.env.example` is written by a human, because the guard's deny rules cover every `.env*` path, including the example.
+- **`verify_setup.py`:** requires `Database/roles/README.md` when the project has a database.
+- **Tests:** one new test checks that the baseline is generated, substituted and wired into the design template, the policy, the security report and both agents. The existing `Database/` test now covers `roles/`. The new test fails without the template changes. The suite has 65 tests, all passing.
+- **Projects scaffolded before this change:** they don't get the folder automatically. Render `assets/templates/Database/roles/README.md.tmpl` into `Database/roles/README.md`, then copy the changed sections of the other templates listed above.
+
 ## 2026-10-23
 
 **`render-graph.py` also writes `graph.md` as an export of `graph.jsonl`.** In a real project, the stale fallback `graph.md` kept looking like a second source of truth next to `graph.jsonl`. The user asked for it to be regenerated from the graph, but nothing in the scaffold could do that, so the agent wrote a one-off script that would leave the file stale again after the next graph change.

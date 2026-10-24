@@ -21,8 +21,8 @@ AGENTS = ["planner", "architect", "domain", "test", "qa", "implementer", "review
 OPTIONAL_AGENTS = ["designer", "frontend", "ui-reviewer"]   # generated only when HAS_UI is yes
 UI_SKILL = "frontend-craft"
 UI_SKILL_REFS = ["art-direction.md", "app-screens.md", "materials-type.md", "motion.md", "worst-case.md", "review.md"]
-SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution"]
-DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions"]
+SKILLS = ["orchestrate", "plan-grill", "spec-writer", "amend-constitution", "to-spec", "to-tickets", "review-change", "launch-readiness"]
+DATABASE_OBJECT_KINDS = ["tables", "indexes", "foreign-keys", "primary-keys", "packages", "functions", "roles"]
 MUST_DENY = ["Bash(psql:*)", "Bash(mysql:*)", "Bash(mongosh:*)", "Bash(redis-cli:*)", "Bash(sqlite3:*)",
              "Bash(docker exec:*)", "Bash(aws secretsmanager get-secret-value:*)",
              "Read(./.env)", "Read(./.env.*)"]
@@ -112,6 +112,13 @@ def main() -> None:
         r = subprocess.run([sys.executable, str(traceability), "--specs-dir", str(t / "docs" / "specs")],
                             capture_output=True, text=True)
         check(r.returncode == 0, "check-traceability.py runs cleanly against the fresh scaffold (no features yet)")
+
+    for script, args in (("index-docs.py", ["--find", "glossary"]), ("spec-state.py", ["--specs-dir", str(t / "docs" / "specs")])):
+        sp_ = t / ".claude" / "scripts" / script
+        check(sp_.is_file(), f"exists: {script}")
+        if sp_.is_file():
+            r = subprocess.run([sys.executable, str(sp_), *args], capture_output=True, text=True, cwd=t)
+            check(r.returncode == 0, f"{script} runs cleanly against the fresh scaffold")
 
     render_graph = t / ".claude" / "scripts" / "render-graph.py"
     check(render_graph.is_file(), "exists: render-graph.py (knowledge graph 3D HTML view)")
@@ -250,6 +257,10 @@ def main() -> None:
     for sk in SKILLS:
         p = t / ".claude" / "skills" / sk / "SKILL.md"
         check(p.is_file() and frontmatter(p).get("name", "").strip() == sk, f"skill valid: {sk}")
+
+    check((t / ".claude" / "skills" / "review-change" / "references" / "code-smells.md").is_file(),
+          "exists: .claude/skills/review-change/references/code-smells.md")
+    check((t / "docs" / "specs" / "_templates" / "prd.md").is_file(), "exists: docs/specs/_templates/prd.md")
 
     for ref in ["parallel-implementation.md", "context-hygiene.md", "archiving.md", "revert-checklist.md"]:
         p = t / ".claude" / "skills" / "orchestrate" / "references" / ref

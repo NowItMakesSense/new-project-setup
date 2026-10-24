@@ -5,17 +5,18 @@ Phases run in order. Each ends with a **human gate**: the orchestrator summarize
 | # | Phase | Owner agent(s) | Output | Gate |
 |---|---|---|---|---|
 | 1 | Discovery | `planner` via `/plan-grill`; `knowledge-graph` seeds/retrofits | `docs/specs/discovery.md`; initial knowledge graph | User confirms summary |
-| 2 | Specs | `planner` + `spec-writer` | `docs/specs/<feature>/requirements.md` | User approves requirements |
+| 2 | Spec & requirements | `planner` + `/to-spec` + `/spec-writer` | `prd.md` (user stories, implementation/testing decisions), then `requirements.md` | User approves each |
 | 3 | Architecture & Domain | `architect`, `domain`, `knowledge-graph`, `designer` (if `HAS_UI`) | `design.md` (incl. feature diagram), ADRs, glossary, threat model, updated knowledge graph, `Database/` update + `overview.html` (if the feature touches UI/DB) | User approves design |
-| 4 | Task breakdown | `planner` | `tasks.md` (TDD-sized tasks) | User approves tasks |
+| 4 | Task breakdown | `planner` + `/to-tickets` | `tasks.md` (tracer-bullet slices with `Blocked by`, `Demo`, `Status`) | User approves tasks |
 | 5 | TDD loop (per task) | `test` -> the task's owner (`implementer`, or `frontend` for `Owner: frontend`) -> refactor; `debug` if one pass of the protocol doesn't resolve it | Red, green, refactor commits | Tests green |
-| 6 | Review & QA | `reviewer`, `qa`, `ui-reviewer` (when a task has `Owner: frontend`) | Findings logged in `findings-ledger.md`; integration/e2e/edge-case test results; coverage % | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets `COVERAGE_THRESHOLD` |
+| 6 | Review & QA | `reviewer` (`/review-change`: Standards + Spec axes), `qa`, `ui-reviewer` (when a task has `Owner: frontend`) | Findings logged in `findings-ledger.md`; integration/e2e/edge-case test results; coverage % | No `Open`/`Confirmed` Critical/High AND QA suite green AND coverage meets `COVERAGE_THRESHOLD` |
 | 7 | Security | `security` | `security-report.md` (ASVS checklist); findings in the shared ledger | No `Open`/`Confirmed` Critical/High in the ledger |
-| 8 | CI/CD, docs, release | `devops-docs` | Pipeline, README, changelog | User confirms release |
+| 8 | CI/CD, docs, release | `devops-docs` (+ `launch-readiness`) | Pipeline, README, changelog, launch checklist | User confirms release |
 | - | Retro | orchestrator, after phase 8 | `docs/specs/<feature>/retro.md` | Carried-forward items applied before the next feature |
 
 Rules for the orchestrator:
 - At start, asks the user which model/effort to use for itself and for the subagents - each subagent already has a role-tiered default set by the `MODEL_PRIORITY` interview answer that the user can keep or override; records the choice in `docs/specs/STATUS.md` (the index) and applies it on every delegation. See `.claude/skills/orchestrate/SKILL.md#model--effort`.
+- `/orchestrate` accepts a spec path, feature slug or free-text request, and resumes from `.claude/scripts/spec-state.py` (what exists, task frontier, next phase) instead of restarting; approved artifacts are never regenerated and `done` tasks never redone.
 - Also offers an opt-in "autonomous mode" for phases 1-4 only (skips re-confirming each gate individually) - phases 6, 7 and 8 are always human-gated, no matter what the user opts into.
 - Before phase 1 on a project's very first `/orchestrate` run, check whether source code already exists with no knowledge graph yet; if so, delegate to `knowledge-graph` for retrofit extraction before anything else, and have it present the proposed graph for confirmation.
 - `knowledge-graph` always checks the existing graph before writing (idempotent); it must never silently delete nodes/relations; it also proposes (never auto-applies) consolidation of likely-duplicate entities at the start of each feature's phase 3.

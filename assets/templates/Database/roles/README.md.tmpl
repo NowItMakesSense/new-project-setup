@@ -1,0 +1,31 @@
+# Roles
+
+One file per database role: `<role_name>.md`, plus one `privilege-matrix.md` for the whole project.
+
+```
+# <role_name>
+
+Introduced by feature: <feature-slug>
+Purpose: <owner of schemas | runtime app | human-run migrator | read-only reporting | ...>
+Attributes: <LOGIN/NOLOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS, INHERIT/NOINHERIT - and why>
+Member of: <roles, or none>
+Grants: <link to its rows in privilege-matrix.md>
+Limits: <statement_timeout, idle_in_transaction_session_timeout, lock_timeout, CONNECTION LIMIT, search_path>
+Used by: <component or human role; never "agents">
+Credential: <configuration/secret name only - never the value>
+```
+
+`privilege-matrix.md` lists, for every table/sequence/function in `Database/`, exactly which operations (SELECT, INSERT, UPDATE (columns), DELETE, USAGE, EXECUTE) each role gets, each with the use case or job that needs it. An operation no use case needs is not granted.
+
+## Baseline every project with a database starts from
+Engine-agnostic intent (PostgreSQL syntax in examples). The `architect` adapts it to the engine in phase 3 and records deviations in an ADR.
+- **Bootstrap/admin superuser:** cluster administration and first initialization only. Never in the application's configuration, never used at runtime.
+- **Owner role (`<project>_owner`, NOLOGIN):** owns the schemas and objects. DDL happens only through it.
+- **Migrator (`<project>_migrator`, LOGIN):** used by a human to apply reviewed migration files (member of the owner role, or `SET ROLE` to it). Its credentials never appear in the application's configuration.
+- **Runtime app role (`<project>_app`, LOGIN):** NOSUPERUSER, NOCREATEDB, NOCREATEROLE; `USAGE` on its schemas and only the DML in `privilege-matrix.md`; no DDL. The application never applies migrations or creates schemas at startup.
+- **Hardening:** `REVOKE ALL ON DATABASE ... FROM PUBLIC`; `REVOKE CREATE ON SCHEMA public FROM PUBLIC`; `ALTER DEFAULT PRIVILEGES` so future objects are born with the matrix grants; a fixed `search_path` per role.
+- **Limits per login role:** `statement_timeout`, `idle_in_transaction_session_timeout`, `lock_timeout`, `CONNECTION LIMIT`.
+- **Transport:** TLS with certificate verification outside an isolated local dev network (PostgreSQL: `sslmode=verify-full`).
+- **Row-level security:** a recorded decision (adopted or not, and why), never left implicit.
+
+Role-creation scripts are generated only as files (e.g. a container init script) for a human to review and run. Passwords come from environment variables or a secret manager at run time, never literals in the repo. Agents never execute them. See `../README.md` and `docs/security-policy.md`.

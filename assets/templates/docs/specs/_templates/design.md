@@ -35,6 +35,15 @@ Macro view, beyond code layering:
 - **Scaling approach**: vertical vs horizontal, stateless vs stateful, bottlenecks anticipated.
 Skip sub-points that genuinely don't apply (e.g. a CLI tool has no deployment topology) - say so explicitly rather than leaving it blank.
 
+## Database access control (only if this feature touches the database)
+Owned by `architect`; the project-wide source is `Database/roles/` (baseline in `Database/roles/README.md`).
+- **Roles used:** which role each component connects as (runtime app, migrator, jobs). The app is never the superuser or schema owner.
+- **Privilege matrix rows:** for each table/sequence/function this feature adds or uses, the exact operations granted per role and the use case that needs each.
+- **No DDL at runtime:** migrations are generated as files and applied by a human with the migrator role; the app never migrates or creates schemas at startup.
+- **Transport and limits:** TLS requirement per environment; statement/idle/lock timeouts and connection limit for the roles involved.
+- **Row-level security:** adopted or not, and why.
+- **Backups and retention:** how deleted personal data ages out of backups under the project's compliance regime, or the open question if not decided yet.
+
 ## Contracts
 APIs, events, schemas.
 
@@ -43,6 +52,8 @@ APIs, events, schemas.
 ## Threat model (STRIDE-lite)
 | Threat | Asset | Mitigation |
 |---|---|---|
+
+If this feature touches the database, cover at least: a compromised app process (its role's privileges bound the damage), DDL/migration at runtime, database traffic without TLS, long-running queries holding connections, and backups retaining deleted personal data.
 
 ## Test strategy
 Unit / integration / e2e. Persistence in tests: fakes, in-memory or disposable infra. NEVER the system database.
