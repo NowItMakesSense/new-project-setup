@@ -1,5 +1,5 @@
 {
-  {{MCP_ENABLED_BLOCK}}"permissions": {
+  "permissions": {
     "deny": [
       "Bash(psql:*)",
       "Bash(pg_dump:*)",
@@ -70,6 +70,26 @@
           {
             "type": "command",
             "command": "{{PYTHON_CMD}} \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-db-access.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{PYTHON_CMD}} \"$CLAUDE_PROJECT_DIR/.claude/hooks/graph-hook.py\" nudge"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{PYTHON_CMD}} \"$CLAUDE_PROJECT_DIR/.claude/hooks/graph-hook.py\" refresh"
           }
         ]
       }

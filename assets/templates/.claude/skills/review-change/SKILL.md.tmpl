@@ -11,7 +11,7 @@ Code can pass one axis and fail the other: perfectly clean code that builds the 
 Review `git diff <fixed-point>...HEAD` (read-only git: `diff`, `log`, `show`, `status`). The fixed point is a commit, branch, tag or merge-base the user or orchestrator names; if none, use the feature branch's merge-base with the default branch and say so. Confirm it resolves and the diff is not empty. Note the size: a diff over ~400 changed lines should be reviewed per task/slice (ask the orchestrator to split it) - large diffs hide defects.
 
 ## 2. Find the spec and the standards
-- **Spec**: `docs/specs/<feature>/` - `prd.md`, `requirements.md`, `design.md`, `tasks.md`. Locate them via `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <feature>`. No spec for a non-Trivial change is itself a Critical finding; ask the orchestrator.
+- **Spec**: `docs/specs/<feature>/` - `prd.md`, `requirements.md`, `design.md`, `tasks.md`. Locate them via `{{PYTHON_CMD}} .claude/scripts/build-graph.py query <feature>`. No spec for a non-Trivial change is itself a Critical finding; ask the orchestrator.
 - **Standards**: `CLAUDE.md` engineering defaults, `docs/glossary.md` (naming), `docs/test-strategy.md`, `docs/security-policy.md`, any `CODING_STANDARDS.md`/`CONTRIBUTING.md`, plus the lint/format config. Project standards override the generic baseline in `references/code-smells.md`.
 
 ## 3. Run the two axes as independent passes

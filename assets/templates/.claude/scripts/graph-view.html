@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>__TITLE__ · Knowledge graph</title>
+<title>__TITLE__ · Project graph</title>
 <!--
   Generated view of docs/knowledge-graph/ - do not edit the copy in docs/, re-run
-  .claude/scripts/render-graph.py instead. This template is .claude/scripts/graph-view.html.
+  .claude/scripts/build-graph.py instead. This template is .claude/scripts/graph-view.html.
 
-  Design: an app screen whose one question is "what does the domain contain and how does it
+  Design: an app screen whose one question is "what is in the project and how do its files
   connect?" - the graph fills the whole viewport and every control floats over it as glass
   (frontend-craft's glass material, after apple-design's translucent materials): three weights
   (thin for standalone controls, regular for panes, thick for the palette), one light edge, one
@@ -30,7 +30,7 @@
     --text: #ffffff;
     --muted: #c9cbd0;             /* vibrancy: secondary text over glass sits brighter than on a solid surface */
     --faint: #a3a6ad;
-    --accent: #c6f24e;            /* the one data hue: aggregates, the heart of the model */
+    --accent: #c6f24e;            /* the one data hue: source files, the heart of the project */
     --warn: #e5a93b;
 
     /* The glass material (frontend-craft/references/materials-type.md): three weights, one edge,
@@ -362,19 +362,19 @@
     <h1 id="title">__TITLE__</h1>
     <span class="sep" aria-hidden="true"></span>
     <span class="question" id="question"></span>
-    <button class="pill-warning num" id="undeclared" hidden></button>
+    <button class="pill-warning num" id="missing" hidden></button>
   </div>
   <span class="spacer"></span>
-  <button class="search glass-thin" id="open-search" aria-label="Search concepts" aria-keyshortcuts="/ Control+K Meta+K">
+  <button class="search glass-thin" id="open-search" aria-label="Search files" aria-keyshortcuts="/ Control+K Meta+K">
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m12 12 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-    <span class="ph">Search concepts</span>
+    <span class="ph">Search files</span>
     <span class="keys"><kbd id="k-mod">Ctrl</kbd><kbd>K</kbd></span>
   </button>
 </header>
 
 <main id="stage" aria-label="3D knowledge graph"></main>
 
-<nav class="legend glass" id="legend" aria-label="Concept types" hidden>
+<nav class="legend glass" id="legend" aria-label="File kinds" hidden>
   <div class="pane-head"><h2>Types</h2><span class="total num" id="legend-total"></span><span class="spacer"></span>
     <button class="link" id="legend-all" hidden>Show all</button></div>
   <div class="legend-rows scroll" id="legend-rows"></div>
@@ -396,7 +396,7 @@
   </button>
 </div>
 
-<aside class="sheet glass" id="sheet" aria-label="Concept details" inert>
+<aside class="sheet glass" id="sheet" aria-label="File details" inert>
   <div class="sheet-head">
     <div>
       <div class="kind"><span class="swatch" id="d-swatch"></span><span id="d-type"></span></div>
@@ -414,14 +414,14 @@
 </aside>
 
 <div class="scrim" id="scrim" hidden></div>
-<div class="palette glass-thick" id="palette" role="dialog" aria-modal="true" aria-label="Search concepts" hidden>
+<div class="palette glass-thick" id="palette" role="dialog" aria-modal="true" aria-label="Search files" hidden>
   <div class="field">
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m12 12 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     <input id="q" type="text" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list"
-           placeholder="Search concepts by name or type" autocomplete="off" spellcheck="false">
+           placeholder="Search files by path or kind" autocomplete="off" spellcheck="false">
     <kbd>Esc</kbd>
   </div>
-  <div class="results-head"><span>Concepts</span><span class="num" id="r-count"></span></div>
+  <div class="results-head"><span>Files</span><span class="num" id="r-count"></span></div>
   <ul class="results scroll" id="results" role="listbox"></ul>
   <div class="hints" aria-hidden="true"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
 </div>
@@ -447,34 +447,22 @@ const plural = new Intl.PluralRules("en");
 const count = (n, one, many) => `${fmt.format(n)} ${plural.select(n) === "one" ? one : many}`;
 
 // ---------- the model ----------
-// The four DDD kinds that carry the model get the screen's hues; everything else stays neutral, so
-// colour still means something (taste: at most four hues, colour on data only).
+// Four file kinds carry the screen's hues; everything else stays neutral, so colour still means
+// something (taste: at most four hues, colour on data only).
 const KINDS = {
-  aggregate:      { label: "Aggregate", color: "#c6f24e", rank: 1 },
-  entity:         { label: "Entity", color: "#e6e6e6", rank: 2 },
-  valueobject:    { label: "Value object", color: "#7fb4ff", rank: 3 },
-  domainevent:    { label: "Domain event", color: "#e5a93b", rank: 4 },
-  boundedcontext: { label: "Bounded context", color: "#ffffff", rank: 0, ring: true },
+  source: { label: "Source", color: "#c6f24e", rank: 1 },
+  test:   { label: "Test", color: "#7fb4ff", rank: 2 },
+  spec:   { label: "Spec", color: "#e5a93b", rank: 3 },
+  doc:    { label: "Doc", color: "#e6e6e6", rank: 4 },
 };
-const ALIASES = { aggregateroot: "aggregate", vo: "valueobject", value: "valueobject", event: "domainevent",
-  context: "boundedcontext", bc: "boundedcontext" };
 const NEUTRALS = ["#8a8a8a", "#6b6b6b", "#a3a3a3", "#5c5c5c"];
-// "BoundedContext" / "value_object" -> "Bounded context" / "Value object": the project's word, set as a label.
-const humanize = (t) => { const s = String(t).replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
-// Kinds often carry notes: "Entity (aggregate root)" is an aggregate; "Value Object (imutável)" and
-// "Actor / Entity" keep only the DDD kind, so qualifiers don't push a concept into neutral grey.
-const kindKey = (t) => {
-  const s = String(t).toLowerCase();
-  if (s.includes("aggregate")) return "aggregate";
-  const k = s.replace(/\(.*?\)/g, "").split("/").pop().replace(/[\s_-]+/g, "");
-  return ALIASES[k] || k;
-};
+const humanize = (t) => { const s = String(t).replace(/[_-]+/g, " ").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
 const typeStyle = {};
 let neutralIx = 0;
 for (const t of [...new Set(DATA.nodes.map((n) => n.type))].sort()) {
-  const k = KINDS[kindKey(t)];
-  if (t === "undeclared") typeStyle[t] = { label: "Undeclared", color: "#5a5a5a", rank: 99, hollow: true };
-  else if (k) typeStyle[t] = { ...k, label: humanize(t) };   // keep the project's own word for its kind
+  const k = KINDS[t];
+  if (t === "missing") typeStyle[t] = { label: "Missing file", color: "#5a5a5a", rank: 99, hollow: true };
+  else if (k) typeStyle[t] = { ...k };
   else typeStyle[t] = { label: humanize(t), color: NEUTRALS[neutralIx++ % NEUTRALS.length], rank: 10 };
 }
 const byId = new Map(DATA.nodes.map((n) => [n.id, n]));
@@ -484,21 +472,19 @@ const degree = (n) => n.out.length + n.in.length;
 const big = DATA.nodes.length > 800;
 const hubs = new Set([...DATA.nodes].filter((n) => degree(n) >= 2).sort((a, b) => degree(b) - degree(a))
   .slice(0, Math.min(big ? 25 : 40, Math.ceil(DATA.nodes.length * (DATA.nodes.length <= 60 ? 0.4 : 0.15)))).map((n) => n.id));
-const contexts = DATA.nodes.filter((n) => typeStyle[n.type].ring).length;
-const undeclared = DATA.nodes.filter((n) => n.type === "undeclared").length;
+const missing = DATA.nodes.filter((n) => n.type === "missing").length;
 
 // ---------- the title row answers the screen's question ----------
 const concepts = DATA.nodes.length;
 $("question").textContent = concepts === 0 ? "" :
-  (contexts ? `${count(concepts, "concept", "concepts")} in ${count(contexts, "bounded context", "bounded contexts")}` : count(concepts, "concept", "concepts"))
-  + ` · ${count(DATA.links.length, "relation", "relations")}`;
+  `${count(concepts, "file", "files")} · ${count(DATA.links.length, "relationship", "relationships")}`;
 $("question").classList.add("num");
-if (undeclared) {
-  const u = $("undeclared");
+if (missing) {
+  const u = $("missing");
   u.hidden = false;
-  u.textContent = `${fmt.format(undeclared)} undeclared`;
-  u.title = "Relation endpoints with no entity of their own - usually a missing create_entities call";
-  u.addEventListener("click", () => window.openPalette?.("undeclared"));
+  u.textContent = `${fmt.format(missing)} broken`;
+  u.title = "Files that something links to but that are not in the project";
+  u.addEventListener("click", () => window.openPalette?.("missing"));
 }
 
 // Scroll containers fade at whichever edge still has content past it (an Apple scroll-edge effect
@@ -545,23 +531,23 @@ function showState(title, lines, listNodes) {
   }
   box.hidden = false;
   $("booting").hidden = true;
-  $("open-search").hidden = $("undeclared").hidden = true;   // nothing to search or open in a whole-screen state
+  $("open-search").hidden = $("missing").hidden = true;   // nothing to search or open in a whole-screen state
 }
 
 if (concepts === 0) {
-  showState("No concepts yet", [
-    ["The graph fills as the knowledge-graph agent records the bounded contexts, aggregates and entities named in discovery.md and in each approved design.md."],
-    ["It re-renders this page after every change; to refresh it by hand run ", { code: "python .claude/scripts/render-graph.py" }, "."],
+  showState("No files yet", [
+    ["The graph is built from the project's files and the relationships between them (imports, links, requirement coverage)."],
+    ["Build it with ", { code: "python .claude/scripts/build-graph.py" }, "."],
   ]);
 } else {
   const booting = $("booting");
   booting.hidden = false;
-  $("booting-text").textContent = `Loading the 3D view of ${count(concepts, "concept", "concepts")}…`;
+  $("booting-text").textContent = `Loading the 3D view of ${count(concepts, "file", "files")}…`;
   boot().then(() => { booting.hidden = true; }).catch((err) => {
     console.error(err);
     showState("The 3D view couldn't load", [
       ["It needs network access to fetch three.js and 3d-force-graph from esm.sh, and a browser with WebGL."],
-      ["Every concept in the graph is listed below in the meantime."],
+      ["Every file in the graph is listed below in the meantime."],
     ], DATA.nodes);
   });
 }
@@ -607,7 +593,8 @@ async function boot() {
     }
     // CSS2DRenderer owns the wrapper's transform, so the offset above the node lives on the inner label.
     const wrap = el("div");
-    const label = el("div", "label", n.id.length > 28 ? n.id.slice(0, 27) + "…" : n.id);
+    const shown = n.label || n.id;
+    const label = el("div", "label", shown.length > 28 ? shown.slice(0, 27) + "…" : shown);
     label.title = n.id;
     wrap.append(label);
     const tag = new CSS2DObject(wrap);
@@ -795,10 +782,10 @@ async function boot() {
     $("d-swatch").replaceWith(Object.assign(swatchFor(n.type), { id: "d-swatch" }));
     $("d-type").textContent = st.label;
     $("d-name").textContent = n.id;
-    $("d-meta").textContent = `${count(degree(n), "relation", "relations")} · ${count(n.observations.length, "observation", "observations")}`;
+    $("d-meta").textContent = `${count(degree(n), "relationship", "relationships")} · ${count(n.observations.length, "note", "notes")}`;
     const obs = $("d-obs");
     obs.replaceChildren(...(n.observations.length ? n.observations.map((o) => el("li", null, o))
-      : [el("li", "empty-note", n.type === "undeclared" ? "Only appears as a relation endpoint - no entity declared yet." : "None recorded yet.")]));
+      : [el("li", "empty-note", n.type === "missing" ? "Linked from other files but not found in the project." : "No notes.")]));
     const groups = new Map();
     for (const l of n.out) { const k = l.label || "related to"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([byId.get(idOf(l.target)), "out"]); }
     for (const l of n.in) { const k = l.label || "related to"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([byId.get(idOf(l.source)), "in"]); }
@@ -891,7 +878,7 @@ async function boot() {
       li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(i); });
       li.addEventListener("pointermove", () => mark(i));
       return li;
-    }) : [el("li", "none", `No concept matches “${q.value.trim()}”.`)]));
+    }) : [el("li", "none", `No file matches “${q.value.trim()}”.`)]));
     mark(0);
   }
   // The typed part of a name, set in <mark> - built from text nodes, never from HTML.
@@ -938,7 +925,7 @@ async function boot() {
   addEventListener("resize", () => { Graph.width(stage.clientWidth).height(stage.clientHeight); shift = sheetShift(); applyShift(); });
 
   // Labels never sit on each other: a few times a second, keep the most important label in each spot
-  // (the hovered or selected concept, then its neighbours, then by degree) and hide the ones it covers.
+  // (the hovered or selected file, then its neighbours, then by degree) and hide the ones it covers.
   const priority = (n) => (n === (hovered || selected) ? 1e6 : 0) + (focusSet && focusSet.has(n.id) ? 1e4 : 0) + degree(n);
   setInterval(() => {
     const shown = DATA.nodes.filter((n) => n.__parts && !n.__parts.label.classList.contains("dim") && !hiddenTypes.has(n.type))
@@ -954,7 +941,7 @@ async function boot() {
   paint();
   requestAnimationFrame(() => fit(0));        // settled by the warm-up ticks; no entrance animation
   window.__kg = { Graph, select, fit, byId };  // handle for debugging and screenshots
-  // Deep links: #select=<name> opens a concept, #search=<term> opens the palette with a term.
+  // Deep links: #select=<name> opens a file, #search=<term> opens the palette with a term.
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.get("select") && byId.has(hash.get("select"))) setTimeout(() => select(byId.get(hash.get("select"))), 50);
   else if (hash.has("search")) openPalette(hash.get("search"));

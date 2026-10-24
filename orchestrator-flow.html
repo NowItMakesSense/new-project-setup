@@ -284,14 +284,11 @@ flowchart TD
     D --> E
     C -- não --> E["Start 3: pergunta qual feature/fase trabalhar"]
     E --> F["Start 4: pergunta model/effort<br/>orquestrador + cada subagente; grava em STATUS.md"]
-    F --> G{"Start 5: código já existe<br/>E não há knowledge graph?"}
-    G -- sim retrofit --> H["knowledge-graph analisa código/docs existentes<br/>e PROPÕE entidades/relações"]
-    H --> I[Usuário confirma antes de persistir]
-    I --> J1
-    G -- não --> J1
+    F --> G["Start 5: reconstrói o grafo do projeto<br/>build-graph.py: arquivos e relações"]
+    G --> J1
 
     subgraph P1["Fase 1 · Discovery"]
-        J1["planner + /plan-grill → discovery.md"] --> J2["knowledge-graph semeia o grafo<br/>a partir de discovery.md + glossary.md"]
+        J1["planner + /plan-grill → discovery.md"] --> J2["knowledge-graph reconstrói o grafo<br/>com os arquivos novos"]
     end
     J2 --> GATE1{Usuário confirma resumo?}
     GATE1 -- não --> J1
@@ -310,7 +307,7 @@ flowchart TD
         L3{HAS_UI = yes?}
         L3 -- sim --> L4["designer → IA, wireframes,<br/>design system, WCAG"]
         L3 -- não --> L5[pula designer]
-        L4 --> L6["knowledge-graph estende o grafo<br/>a partir do design.md aprovado"]
+        L4 --> L6["knowledge-graph reconstrói o grafo<br/>com design.md e Database/"]
         L5 --> L6
     end
     L1 --> L3
@@ -378,12 +375,12 @@ flowchart TD
     <h2>Legenda &middot; o que é novo desde a versão original de 8 agentes</h2>
     <div class="callouts">
       <div class="callout">
-        <span class="code">G·H·I</span>
-        <p>Retrofit: só dispara quando já existe código no projeto mas ainda não existe <em>knowledge graph</em>. O grafo é só proposto — nunca persistido sem confirmação.</p>
+        <span class="code">G</span>
+        <p>O grafo é gerado dos próprios arquivos (imports, links, cobertura de REQ-ID) — não há retrofit nem confirmação. Relações <em>INFERRED</em> são pistas a verificar, <em>EXTRACTED</em> estão escritas nos arquivos.</p>
       </div>
       <div class="callout">
         <span class="code">J2·L6</span>
-        <p><code class="inline">knowledge-graph</code> semeia na fase 1 e estende na fase 3, sempre checando o grafo existente antes de criar (idempotência).</p>
+        <p><code class="inline">knowledge-graph</code> reconstrói o grafo depois de cada fase que muda arquivos; as consultas (<code class="inline">query</code>, <code class="inline">explain</code>, <code class="inline">path</code>) substituem o grep às cegas.</p>
       </div>
       <div class="callout">
         <span class="code">L3·L4·L5</span>

@@ -5,7 +5,7 @@ description: Write or update spec-driven artifacts for a feature - requirements 
 
 # spec-writer
 
-1. Confirm the feature name. Find what exists with `{{PYTHON_CMD}} .claude/scripts/index-docs.py --find <feature terms>` before opening files, then read `docs/specs/discovery.md`, `docs/glossary.md`, existing ADRs and the feature's `prd.md`. If anything needed is unknown, **ask** - do not invent.
+1. Confirm the feature name. Find what exists with `{{PYTHON_CMD}} .claude/scripts/build-graph.py query <feature terms>` before opening files, then read `docs/specs/discovery.md`, `docs/glossary.md`, existing ADRs and the feature's `prd.md`. If anything needed is unknown, **ask** - do not invent.
    If there is no `docs/specs/<feature>/prd.md` yet, run `/to-spec` first: requirements are derived from the approved PRD's user stories, not from thin air.
 2. Copy templates from `docs/specs/_templates/` into `docs/specs/<feature-slug>/` and fill them in the project's docs language.
 3. Produce in order, getting user approval between each:
@@ -17,4 +17,4 @@ description: Write or update spec-driven artifacts for a feature - requirements 
 5. If this feature touches the database, once `design.md` is approved, update (never silently replace) `Database/er-diagram.md` and the relevant per-object file(s) under `Database/<kind>/` - that folder is the only place the complete, cross-feature schema lives (owned by `architect`).
 6. Set the status header (Draft -> Approved) with date and approver only after explicit user approval.
 7. Record architectural decisions as ADRs in `docs/adr/` using the template.
-8. Keep `docs/specs/STATUS.md` updated, and refresh the docs index afterwards (`{{PYTHON_CMD}} .claude/scripts/index-docs.py`) so the next lookup finds the new files.
+8. Keep `docs/specs/STATUS.md` updated, and rebuild the project graph afterwards (`{{PYTHON_CMD}} .claude/scripts/build-graph.py`) so the next lookup finds the new files.

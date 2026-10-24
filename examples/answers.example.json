@@ -16,7 +16,6 @@
   "COMPLIANCE": "none",
   "TEAM": "team of 3, PR review required before merge",
   "PYTHON_CMD": "python3",
-  "NPX_CMD": "npx",
   "HAS_UI": "yes",
   "MODEL_PRIORITY": "balanced",
   "COVERAGE_THRESHOLD": "80",
